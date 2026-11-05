@@ -1,0 +1,116 @@
+# ramani: .github/workflows/publish.yml
+# Setup
+# 1. Create GitHub environments: 'pypi', 'testpypi'
+# 2. In PyPI/TestPyPI, add trusted publisher: GitHub, owner/repo, workflow: publish.yml, env: pypi/testpypi
+# 3. Add the TestPyPI index to `pyproject.toml` (required for `uv publish --index testpypi`):
+#
+#    [[tool.uv.index]]
+#    name = "testpypi"
+#    url = "https://test.pypi.org/simple/"
+#    publish-url = "https://test.pypi.org/legacy/"
+#    explicit = true
+
+# Release process
+# 1. Bump version: `uv version --bump patch|minor|major`, then commit and push.
+# 2. Run this workflow from the Actions UI (main branch only).
+#    - Rejects `.dev` versions.
+#    - After a successful publish, creates the git tag if missing.
+#    - Publishing to PyPI also creates a GitHub release with the built distributions attached.
+name: OIDC Trusted Publishing to PyPI or TestPyPI
+
+on:
+  workflow_dispatch:
+    inputs:
+      index:
+        description: "Target package index. Choose 'pypi' for the official PyPI repository or 'testpypi' for the TestPyPI repository."
+        required: true
+        type: choice
+        options:
+          - pypi
+          - testpypi
+        default: "pypi"
+
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.index }}
+    permissions:
+      contents: write # Push tags, create releases
+      id-token: write # Trusted Publishing (OIDC)
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: false
+
+      # Read version from pyproject.toml, fail early on .dev versions
+      - name: Resolve version and tag
+        id: version
+        shell: bash
+        run: |
+          VERSION="$(uv version --short)"
+
+          if [[ "$VERSION" == *".dev"* ]]; then
+            echo "Error: Refusing manual publish for development version '$VERSION'."
+            echo "Bump to a stable version before dispatching this workflow."
+            exit 1
+          fi
+
+          echo "Resolved version: $VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+          TAG="v$VERSION"
+
+          echo "Resolved version tag: $TAG"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Build and publish to PyPI or TestPyPI
+        shell: bash
+        env:
+          INDEX: ${{ inputs.index }}
+        run: |
+          echo "Building distributions"
+          uv build
+
+          echo "Publishing to $INDEX"
+
+          if [ "$INDEX" = "testpypi" ]; then
+            uv publish --index testpypi
+          else
+            uv publish
+          fi
+
+      - name: Create version tag
+        shell: bash
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          if git ls-remote --tags origin "refs/tags/$TAG" | grep -q .; then
+            echo "Tag '$TAG' already exists on origin. Skipping tag creation."
+          else
+            echo "Tag '$TAG' does not exist on origin. Creating and pushing."
+            git tag "$TAG"
+            git push origin "$TAG"
+          fi
+
+      # Only for PyPI
+      - name: Create GitHub release
+        if: inputs.index == 'pypi'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release '$TAG' already exists. Skipping."
+          else
+            gh release create "$TAG" dist/* \
+              --title "Release $VERSION" \
+              --generate-notes
+          fi

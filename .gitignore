@@ -1,0 +1,14 @@
+# ramani: .gitignore
+# Environment
+/.venv/
+
+# Cache
+/.ruff_cache/
+/.pytest_cache/
+__pycache__/
+
+# Distribution
+/dist/
+
+# Temporary or Rough work
+.tmp/
