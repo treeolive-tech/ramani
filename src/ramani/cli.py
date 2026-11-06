@@ -6,7 +6,7 @@ import sys
 from collections import Counter
 from pathlib import Path
 
-from .color import paint, paint_status
+from .color import paint, paint_count, paint_err, paint_path, paint_status
 from .config import IGNORE_DIRS, IGNORE_EXTS
 from .core import Filters, Styles, run
 from .settings import load_pyproject_styles, parse_style
@@ -158,9 +158,12 @@ def main(argv: list[str] | None = None) -> int:
             try:
                 copy_to_clipboard(tree)
             except RuntimeError as err:
-                print(f"ramani: could not copy to clipboard: {err}", file=sys.stderr)
+                failed = paint_err(
+                    "ramani: could not copy to clipboard:", "red", "bold"
+                )
+                print(f"{failed} {err}", file=sys.stderr)
                 return 1
-            print("(copied to clipboard)", file=sys.stderr)
+            print(paint_err("(copied to clipboard)", "green"), file=sys.stderr)
         return 0
 
     root = args.path if args.path.is_dir() else args.path.parent
@@ -188,22 +191,36 @@ def main(argv: list[str] | None = None) -> int:
         print()
     for rel, status in results:
         if status in CHANGED or (args.verbose and status not in HIDDEN):
-            print(f"{paint_status(status)} {rel}")
+            print(f"{paint_status(status)} {paint_path(rel)}")
 
     counts = Counter(status for _, status in results)
-    summary = (
-        ", ".join(f"{n} {status}" for status, n in sorted(counts.items()))
-        or "no files found"
+    summary = ", ".join(paint_count(n, s) for s, n in sorted(counts.items()))
+    print(
+        (paint("(dry run) ", "cyan", "bold") if dry_run else "")
+        + (summary or paint("no files found", "yellow"))
     )
-    print(("(dry run) " if dry_run else "") + paint(summary, None, "bold"))
 
     unknown = Counter(_label(rel) for rel, status in results if status == "unsupported")
     if unknown:
-        listed = ", ".join(f"{label} x{n}" for label, n in sorted(unknown.items()))
-        print(f"no comment style for: {listed}")
+        listed = ", ".join(
+            f"{paint(label, None, 'bold')} x{n}" for label, n in sorted(unknown.items())
+        )
+        print(f"{paint('no comment style for:', 'yellow')} {listed}")
+        flag = paint("-c EXT=START[,END]", "cyan")
+        table = paint("[tool.ramani.comments]", "cyan")
+        print(f"  add one with {flag} or {table} in pyproject.toml")
+
+    changed = sum(counts[status] for status in CHANGED)
+    if args.check:
         print(
-            "  add one with -c EXT=START[,END] or [tool.ramani.comments] in pyproject.toml"
+            paint(
+                f"✗ {changed} file(s) need changes; run ramani to fix them",
+                "red",
+                "bold",
+            )
+            if changed
+            else paint("✓ all path comments are up to date", "green", "bold")
         )
     if spaced:
         print()
-    return 1 if args.check and CHANGED & counts.keys() else 0
+    return 1 if args.check and changed else 0
