@@ -5,7 +5,7 @@ build-backend = "uv_build"
 
 [project]
 name = "ramani"
-version = "0.1.0a5"
+version = "0.1.0a6"
 description = "Ramani (Swahili for “map”): keeps each file's path as a comment on its first line, updates it when files move, and prints your project as a tree."
 readme = "README.md"
 license = "MIT"
