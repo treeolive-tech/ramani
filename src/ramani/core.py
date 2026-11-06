@@ -1,9 +1,12 @@
 # ramani: src/ramani/core.py
 """Add, refresh and strip path comments."""
 
+import os
 import re
 from collections.abc import Iterator
+from dataclasses import dataclass
 from fnmatch import fnmatch
+from functools import cache
 from pathlib import Path
 
 from .config import (
@@ -52,6 +55,7 @@ def make_comment(rel: str, start: str, end: str = "") -> str:
     return f"{start} {MARKER} {rel}" + (f" {end}" if end else "")
 
 
+@cache
 def _mark_re(start: str, end: str) -> "re.Pattern[str]":
     """Regex matching a marker comment; the stored path is the ``rel`` group."""
     tail = rf"\s*{re.escape(end)}" if end else ""
@@ -81,6 +85,33 @@ def _preamble(lines: list[str], front_matter: bool = False) -> int:
     return n
 
 
+HEAD = 8192  # characters looked at first; longer headers fall back to the whole file
+
+
+def _head(text: str, front_matter: bool) -> tuple[list[str], int]:
+    """Return the first lines of ``text`` and how many the comment must follow.
+
+    Only splits the start of the file unless the header is unusually long.
+
+    Examples::
+
+        _head("#!/bin/sh\necho hi\n", False)  # (["#!/bin/sh\n", "echo hi\n"], 1)
+    """
+    chunk = text[:HEAD]
+    lines = chunk.splitlines(keepends=True)
+    if len(chunk) == len(text):
+        return lines, _preamble(lines, front_matter)
+    lines.pop()  # the last line may be cut off
+    i = _preamble(lines, front_matter)
+    opens_front_matter = (
+        front_matter and bool(lines) and lines[0].rstrip() in ("---", "+++")
+    )
+    if i >= len(lines) or (opens_front_matter and i == 0):
+        lines = text.splitlines(keepends=True)
+        i = _preamble(lines, front_matter)
+    return lines, i
+
+
 def mark_text(
     text: str, rel: str, start: str, end: str = "", front_matter: bool = False
 ) -> tuple[str, str]:
@@ -93,24 +124,21 @@ def mark_text(
         mark_text("x = 1\n", "a/b.py", "#")  # ("# ramani: a/b.py\nx = 1\n", "added")
         mark_text("# ramani: old.py\nx = 1\n", "new.py", "#")  # ("# ramani: new.py\nx = 1\n", "updated")
     """
-    lines = text.splitlines(keepends=True)
-    eol = "\r\n" if "\r\n" in text else "\n"
-    i = _preamble(lines, front_matter)
+    head, i = _head(text, front_matter)
+    eol = "\r\n" if "\r\n" in text[:HEAD] else "\n"
     comment = make_comment(rel, start, end)
 
-    line = lines[i] if i < len(lines) else ""
+    line = head[i] if i < len(head) else ""
     bare = line.rstrip("\r\n")
-    found = _mark_re(start, end).match(bare)
-    if found:
+    pos = sum(map(len, head[:i]))
+    if found := _mark_re(start, end).match(bare):
         if found["rel"] == rel:
             return text, "unchanged"
-        lines[i] = comment + line[len(bare) :]
-        return "".join(lines), "updated"
+        new = comment + line[len(bare) :]
+        return text[:pos] + new + text[pos + len(line) :], "updated"
 
-    if i and not lines[i - 1].endswith(("\n", "\r")):
-        lines[i - 1] += eol
-    lines.insert(i, comment + eol)
-    return "".join(lines), "added"
+    fix = eol if i and not head[i - 1].endswith(("\n", "\r")) else ""
+    return text[:pos] + fix + comment + eol + text[pos:], "added"
 
 
 def strip_text(
@@ -123,79 +151,107 @@ def strip_text(
         strip_text("# ramani: a.py\nx = 1\n", "#")  # ("x = 1\n", True)
         strip_text("x = 1\n", "#")  # ("x = 1\n", False)
     """
-    lines = text.splitlines(keepends=True)
-    i = _preamble(lines, front_matter)
-    if i < len(lines) and _mark_re(start, end).match(lines[i].rstrip("\r\n")):
-        del lines[i]
-        return "".join(lines), True
+    head, i = _head(text, front_matter)
+    if i < len(head) and _mark_re(start, end).match(head[i].rstrip("\r\n")):
+        pos = sum(map(len, head[:i]))
+        return text[:pos] + text[pos + len(head[i]) :], True
     return text, False
 
 
-GitStack = list[tuple[Path, list[Rule]]]
-
-
-def visible_children(
-    directory: Path,
-    stack: GitStack,
-    ignore_dirs: tuple[str, ...] = IGNORE_DIRS,
-    ignore_exts: tuple[str, ...] = IGNORE_EXTS,
-    use_gitignore: bool = True,
-) -> tuple[list[tuple[Path, bool]], GitStack]:
-    """List a folder's non-ignored entries as (path, is_dir), folders first, plus the updated .gitignore stack.
+@dataclass(frozen=True)
+class Filters:
+    """What the walk skips: folder globs, extensions, and whether .gitignore is read.
 
     Examples::
 
-        visible_children(Path("."), [])  # ([(Path("src"), True), (Path("README.md"), False)], [...])
+        Filters(dirs=("gen",), exts=(".js",))  # skip gen/ and *.js
+        Filters(gitignore=False)  # ignore .gitignore files
     """
-    gitignore = directory / ".gitignore"
-    if use_gitignore and gitignore.is_file():
-        rules = parse_gitignore(gitignore.read_text(encoding="utf-8", errors="ignore"))
-        stack = [*stack, (directory, rules)]
+
+    dirs: tuple[str, ...] = IGNORE_DIRS
+    exts: tuple[str, ...] = IGNORE_EXTS
+    gitignore: bool = True
+
+
+DEFAULT = Filters()
+
+GitStack = list[tuple[str, list[Rule]]]  # (folder relative to the root, its rules)
+
+
+def join_rel(rel: str, name: str) -> str:
+    """Append ``name`` to a relative posix path ("" is the root).
+
+    Examples::
+
+        join_rel("", "src")  # "src"
+        join_rel("src", "app.py")  # "src/app.py"
+    """
+    return f"{rel}/{name}" if rel else name
+
+
+def visible_children(
+    directory: str,
+    rel: str,
+    stack: GitStack,
+    filters: Filters = DEFAULT,
+) -> tuple[list[tuple[str, bool]], GitStack]:
+    """List a folder's non-ignored entries as (name, is_dir), folders first, plus the updated .gitignore stack.
+
+    ``rel`` is the folder's path relative to the walk root ("" for the root).
+
+    Examples::
+
+        visible_children("/proj", "", [])  # ([("src", True), ("README.md", False)], [...])
+    """
+    if filters.gitignore:
+        try:
+            with open(
+                os.path.join(directory, ".gitignore"), encoding="utf-8", errors="ignore"
+            ) as f:
+                stack = [*stack, (rel, parse_gitignore(f.read()))]
+        except OSError:
+            pass
     try:
-        entries = sorted(directory.iterdir(), key=lambda p: p.name)
+        with os.scandir(directory) as it:
+            entries = sorted(it, key=lambda e: e.name)
     except PermissionError:
         return [], stack
-    exts = tuple(e.lower() for e in ignore_exts)
+    exts = tuple(e.lower() for e in filters.exts)
     kept = []
     for entry in entries:
         if entry.is_symlink():
             continue
-        is_dir = entry.is_dir()
-        if is_dir and any(fnmatch(entry.name, pattern) for pattern in ignore_dirs):
+        name = entry.name
+        is_dir = entry.is_dir(follow_symlinks=False)
+        if is_dir and any(fnmatch(name, pattern) for pattern in filters.dirs):
             continue
-        if not is_dir and entry.name.lower().endswith(exts):
+        if not is_dir and name.lower().endswith(exts):
             continue
-        if use_gitignore and is_gitignored(entry, is_dir, stack):
+        if stack and is_gitignored(join_rel(rel, name), is_dir, stack):
             continue
-        kept.append((entry, is_dir))
+        kept.append((name, is_dir))
     kept.sort(key=lambda item: not item[1])
     return kept, stack
 
 
-def iter_files(
-    root: Path,
-    ignore_dirs: tuple[str, ...] = IGNORE_DIRS,
-    ignore_exts: tuple[str, ...] = IGNORE_EXTS,
-    use_gitignore: bool = True,
-) -> Iterator[Path]:
-    """Yield files under ``root``, skipping ignored folders, extensions and symlinks.
+def iter_files(root: Path, filters: Filters = DEFAULT) -> Iterator[tuple[Path, str]]:
+    """Yield (path, relative posix path) for files under ``root``, skipping ignored folders, extensions and symlinks.
 
     Examples::
 
-        list(iter_files(Path(".")))  # [PosixPath("src/app.py"), ...]
+        list(iter_files(Path(".")))  # [(PosixPath("/p/src/app.py"), "src/app.py"), ...]
     """
 
-    def walk(directory: Path, stack: GitStack) -> Iterator[Path]:
-        children, stack = visible_children(
-            directory, stack, ignore_dirs, ignore_exts, use_gitignore
-        )
-        for entry, is_dir in children:
+    def walk(directory: str, rel: str, stack: GitStack) -> Iterator[tuple[Path, str]]:
+        children, stack = visible_children(directory, rel, stack, filters)
+        for name, is_dir in children:
+            path, child_rel = os.path.join(directory, name), join_rel(rel, name)
             if is_dir:
-                yield from walk(entry, stack)
+                yield from walk(path, child_rel, stack)
             else:
-                yield entry
+                yield Path(path), child_rel
 
-    yield from walk(root, [])
+    yield from walk(str(root), "", [])
 
 
 def process_file(
@@ -245,9 +301,7 @@ def run(
     *,
     remove: bool = False,
     dry_run: bool = False,
-    ignore_dirs: tuple[str, ...] = IGNORE_DIRS,
-    ignore_exts: tuple[str, ...] = IGNORE_EXTS,
-    use_gitignore: bool = True,
+    filters: Filters = DEFAULT,
     styles: Styles | None = None,
 ) -> list[tuple[str, str]]:
     """Process every file under ``root``; returns (relative path, status) pairs.
@@ -258,16 +312,10 @@ def run(
     """
     root = root.resolve()
     if root.is_file():
-        files, base = [root], root.parent
+        files = [(root, root.name)]
     else:
-        files, base = iter_files(root, ignore_dirs, ignore_exts, use_gitignore), root
-    results = []
-    for file in files:
-        rel = file.relative_to(base).as_posix()
-        results.append(
-            (
-                rel,
-                process_file(file, rel, remove=remove, dry_run=dry_run, styles=styles),
-            )
-        )
-    return results
+        files = iter_files(root, filters)
+    return [
+        (rel, process_file(path, rel, remove=remove, dry_run=dry_run, styles=styles))
+        for path, rel in files
+    ]

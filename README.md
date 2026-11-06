@@ -216,7 +216,7 @@ uv sync
 uv run poe test
 ```
 
-Ramani has a single runtime dependency, [`pyperclip`](https://pypi.org/project/pyperclip/), used only for `--copy`.
+Ramani has two small runtime dependencies: [`termcolor`](https://pypi.org/project/termcolor/) for coloured output and [`pyperclip`](https://pypi.org/project/pyperclip/) for `--copy`. Colour appears only in a terminal; pipes, files and the clipboard get plain text, and `NO_COLOR=1` turns it off.
 
 ## License
 

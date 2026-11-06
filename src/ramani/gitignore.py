@@ -2,7 +2,6 @@
 """Minimal .gitignore parsing and matching."""
 
 import re
-from pathlib import Path
 
 # (compiled regex, negated, dir_only)
 type Rule = tuple["re.Pattern[str]", bool, bool]
@@ -100,18 +99,20 @@ def match_rules(rel: str, is_dir: bool, rules: list[Rule]) -> bool | None:
     return verdict
 
 
-def is_gitignored(
-    path: Path, is_dir: bool, stack: list[tuple[Path, list[Rule]]]
-) -> bool:
-    """Check ``path`` against nested .gitignore rules, outermost first so inner files win.
+def is_gitignored(rel: str, is_dir: bool, stack: list[tuple[str, list[Rule]]]) -> bool:
+    """Check ``rel`` against nested .gitignore rules, outermost first so inner files win.
+
+    Each stack entry is (folder relative to the root, its rules); "" is the root.
 
     Examples::
 
-        is_gitignored(Path("/p/a.log"), False, [(Path("/p"), parse_gitignore("*.log"))])  # True
+        is_gitignored("a.log", False, [("", parse_gitignore("*.log"))])  # True
+        is_gitignored("sub/a.log", False, [("sub", parse_gitignore("!a.log"))])  # False
     """
     verdict = False
     for base, rules in stack:
-        result = match_rules(path.relative_to(base).as_posix(), is_dir, rules)
+        local = rel[len(base) + 1 :] if base else rel
+        result = match_rules(local, is_dir, rules)
         if result is not None:
             verdict = result
     return verdict

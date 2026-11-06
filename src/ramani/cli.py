@@ -6,10 +6,11 @@ import sys
 from collections import Counter
 from pathlib import Path
 
+from .color import paint, paint_status
 from .config import IGNORE_DIRS, IGNORE_EXTS
-from .core import Styles, run
+from .core import Filters, Styles, run
 from .settings import load_pyproject_styles, parse_style
-from .tree import build_tree, copy_to_clipboard
+from .tree import build_tree, copy_to_clipboard, paint_tree
 
 CHANGED = {"added", "updated", "removed"}
 HIDDEN = {"skipped", "unsupported"}
@@ -142,14 +143,17 @@ def main(argv: list[str] | None = None) -> int:
     if not args.path.exists():
         parser.error(f"path not found: {args.path}")
 
-    ignore_dirs = (*IGNORE_DIRS, *args.ignore_dir)
-    ignore_exts = (*IGNORE_EXTS, *map(_norm_ext, args.ignore_ext))
+    filters = Filters(
+        dirs=(*IGNORE_DIRS, *args.ignore_dir),
+        exts=(*IGNORE_EXTS, *map(_norm_ext, args.ignore_ext)),
+        gitignore=not args.no_gitignore,
+    )
 
     if args.tree or args.copy:
         if args.remove or args.check:
             parser.error("--tree/--copy can't be combined with --remove or --check")
-        tree = build_tree(args.path, ignore_dirs, ignore_exts, not args.no_gitignore)
-        print(tree)
+        tree = build_tree(args.path, filters)
+        print(paint_tree(tree))
         if args.copy:
             try:
                 copy_to_clipboard(tree)
@@ -173,22 +177,25 @@ def main(argv: list[str] | None = None) -> int:
         args.path,
         remove=args.remove,
         dry_run=dry_run,
-        ignore_dirs=ignore_dirs,
-        ignore_exts=ignore_exts,
-        use_gitignore=not args.no_gitignore,
+        filters=filters,
         styles=styles,
     )
 
+    spaced = (
+        sys.stdout.isatty()
+    )  # blank lines set the report apart from other tools' output
+    if spaced:
+        print()
     for rel, status in results:
         if status in CHANGED or (args.verbose and status not in HIDDEN):
-            print(f"{status:<9} {rel}")
+            print(f"{paint_status(status)} {rel}")
 
     counts = Counter(status for _, status in results)
     summary = (
         ", ".join(f"{n} {status}" for status, n in sorted(counts.items()))
         or "no files found"
     )
-    print(("(dry run) " if dry_run else "") + summary)
+    print(("(dry run) " if dry_run else "") + paint(summary, None, "bold"))
 
     unknown = Counter(_label(rel) for rel, status in results if status == "unsupported")
     if unknown:
@@ -197,4 +204,6 @@ def main(argv: list[str] | None = None) -> int:
         print(
             "  add one with -c EXT=START[,END] or [tool.ramani.comments] in pyproject.toml"
         )
+    if spaced:
+        print()
     return 1 if args.check and CHANGED & counts.keys() else 0
