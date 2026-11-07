@@ -4,11 +4,12 @@
 import argparse
 import sys
 from collections import Counter
+from itertools import islice
 from pathlib import Path
 
 from .color import paint, paint_count, paint_err, paint_path, paint_status
 from .config import IGNORE_DIRS, IGNORE_EXTS
-from .core import Filters, Styles, run
+from .core import Filters, Styles, iter_files, run
 from .formats import FORMATS, render
 from .settings import (
     load_pyproject_ignore_dirs,
@@ -21,6 +22,7 @@ from .tree import copy_to_clipboard, paint_tree
 
 CHANGED = {"added", "updated", "removed"}
 HIDDEN = {"skipped", "unsupported"}
+MAX_FILES = 1000
 
 
 def _version() -> str:
@@ -51,6 +53,37 @@ def _label(rel: str) -> str:
     """
     path = Path(rel)
     return path.suffix.lower() or path.name
+
+
+def _too_many(root: Path, filters: Filters, limit: int) -> bool:
+    """Tell whether ``root`` holds more than ``limit`` files, stopping the count early.
+
+    Examples::
+
+        _too_many(Path("C:/"), Filters(), 1000)  # True
+        _too_many(Path("small-project"), Filters(), 1000)  # False
+    """
+    files = iter_files(root.resolve(), filters)
+    return sum(1 for _ in islice(files, limit + 1)) > limit
+
+
+def _confirmed(root: Path, limit: int) -> bool:
+    """Ask whether to go on; False if declined or there is no terminal to ask.
+
+    Examples::
+
+        _confirmed(Path("."), 1000)  # True after typing "y"
+    """
+    warning = paint_err(
+        f"ramani: more than {limit} files under {root.resolve()}.", "yellow", "bold"
+    )
+    if not sys.stdin.isatty():
+        print(f"{warning} Pass --yes to continue.", file=sys.stderr)
+        return False
+    try:
+        return input(f"{warning} Continue? [y/N] ").strip().lower() in ("y", "yes")
+    except EOFError:
+        return False
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -111,6 +144,19 @@ def _parser() -> argparse.ArgumentParser:
         "--check",
         action="store_true",
         help="dry run that exits 1 if any file needs changes",
+    )
+    p.add_argument(
+        "--max-files",
+        type=int,
+        default=MAX_FILES,
+        metavar="N",
+        help=f"ask before writing to more than N files (default: {MAX_FILES})",
+    )
+    p.add_argument(
+        "-y",
+        "--yes",
+        action="store_true",
+        help="don't ask for confirmation, even for a large number of files",
     )
     p.add_argument(
         "-v", "--verbose", action="store_true", help="also list unchanged files"
@@ -193,6 +239,15 @@ def main(argv: list[str] | None = None) -> int:
         parser.error(str(err))
 
     dry_run = args.dry_run or args.check
+    if (
+        not (dry_run or args.yes)
+        and args.path.is_dir()
+        and _too_many(args.path, filters, args.max_files)
+        and not _confirmed(args.path, args.max_files)
+    ):
+        print(paint_err("aborted, nothing was changed", "red"), file=sys.stderr)
+        return 1
+
     results = run(
         args.path,
         remove=args.remove,
