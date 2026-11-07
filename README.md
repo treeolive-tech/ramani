@@ -167,7 +167,26 @@ ramani ./src -t -d tests    # tree of ./src, leaving out tests
 
 ## Configuration
 
-Teach ramani a file type on the command line:
+Settings can be given as flags or once and for all in your `pyproject.toml`. Flags beat `pyproject.toml`, which beats the built-in defaults.
+
+### Skip file types
+
+Skip extensions with `-e`:
+
+```bash
+ramani -e .txt -e .csv
+```
+
+or list them in `pyproject.toml` (the leading dot is optional, and `-e` flags add to this list):
+
+```toml
+[tool.ramani]
+ignore-ext = [".txt", ".csv"]
+```
+
+### Teach ramani a file type
+
+On the command line:
 
 ```bash
 ramani -c .abc=//                 # line comment
@@ -175,7 +194,7 @@ ramani -c ".tpl=<!--,-->"         # block comment: start,end
 ramani -c Jenkinsfile=//          # by exact file name
 ```
 
-or once and for all in your `pyproject.toml`:
+or in `pyproject.toml`:
 
 ```toml
 [tool.ramani.comments]
@@ -183,7 +202,7 @@ or once and for all in your `pyproject.toml`:
 ".tpl" = ["<!--", "-->"]
 ```
 
-Flags beat `pyproject.toml`, which beats the built-in styles, so you can override those too.
+Comment styles from flags beat `pyproject.toml`, which beats the built-in styles, so you can override those too.
 
 ## Supported files
 
