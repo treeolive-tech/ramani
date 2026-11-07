@@ -1,10 +1,22 @@
 # ramani: src/ramani/settings.py
-"""User-defined comment styles from ``--comment`` flags and ``[tool.ramani]``."""
+"""User-defined settings from command-line flags and ``[tool.ramani]``."""
 
 import tomllib
 from pathlib import Path
 
 from .core import Styles
+
+
+def norm_ext(ext: str) -> str:
+    """Lower-case an extension and make sure it starts with a dot.
+
+    Examples::
+
+        norm_ext("MD")  # ".md"
+        norm_ext(".txt")  # ".txt"
+    """
+    ext = ext.strip().lower()
+    return ext if ext.startswith(".") else "." + ext
 
 
 def parse_style(spec: str) -> tuple[str, tuple[str, str]]:
@@ -26,6 +38,22 @@ def parse_style(spec: str) -> tuple[str, tuple[str, str]]:
     return (key.lower() if key.startswith(".") else key), (start, end)
 
 
+def _ramani_table(directory: Path) -> dict:
+    """Return the ``[tool.ramani]`` table of ``directory/pyproject.toml`` ({} if missing).
+
+    Examples::
+
+        _ramani_table(Path("."))  # {"ignore-ext": [".txt"], "comments": {...}}
+    """
+    file = directory / "pyproject.toml"
+    if not file.is_file():
+        return {}
+    try:
+        return tomllib.loads(file.read_text(encoding="utf-8"))["tool"]["ramani"]
+    except (KeyError, tomllib.TOMLDecodeError):
+        return {}
+
+
 def load_pyproject_styles(directory: Path) -> Styles:
     """Read ``[tool.ramani.comments]`` from ``directory/pyproject.toml``.
 
@@ -38,17 +66,8 @@ def load_pyproject_styles(directory: Path) -> Styles:
         # ".tpl" = ["<!--", "-->"]
         load_pyproject_styles(Path("."))  # {".abc": ("//", ""), ".tpl": ("<!--", "-->")}
     """
-    file = directory / "pyproject.toml"
-    if not file.is_file():
-        return {}
-    try:
-        table = tomllib.loads(file.read_text(encoding="utf-8"))["tool"]["ramani"][
-            "comments"
-        ]
-    except (KeyError, tomllib.TOMLDecodeError):
-        return {}
     styles: Styles = {}
-    for key, value in table.items():
+    for key, value in _ramani_table(directory).get("comments", {}).items():
         start, end = (
             (value, "")
             if isinstance(value, str)
@@ -56,3 +75,18 @@ def load_pyproject_styles(directory: Path) -> Styles:
         )
         styles[parse_style(f"{key}={start},{end}")[0]] = (start, end)
     return styles
+
+
+def load_pyproject_ignore_exts(directory: Path) -> tuple[str, ...]:
+    """Read ``ignore-ext`` from ``[tool.ramani]`` in ``directory/pyproject.toml``.
+
+    Examples::
+
+        # [tool.ramani]
+        # ignore-ext = [".txt", "CSV"]
+        load_pyproject_ignore_exts(Path("."))  # (".txt", ".csv")
+    """
+    value = _ramani_table(directory).get("ignore-ext", [])
+    return tuple(
+        norm_ext(ext) for ext in ([value] if isinstance(value, str) else value)
+    )

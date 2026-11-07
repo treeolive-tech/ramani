@@ -9,7 +9,12 @@ from pathlib import Path
 from .color import paint, paint_count, paint_err, paint_path, paint_status
 from .config import IGNORE_DIRS, IGNORE_EXTS
 from .core import Filters, Styles, run
-from .settings import load_pyproject_styles, parse_style
+from .settings import (
+    load_pyproject_ignore_exts,
+    load_pyproject_styles,
+    norm_ext,
+    parse_style,
+)
 from .tree import build_tree, copy_to_clipboard, paint_tree
 
 CHANGED = {"added", "updated", "removed"}
@@ -46,17 +51,6 @@ def _label(rel: str) -> str:
     return path.suffix.lower() or path.name
 
 
-def _norm_ext(ext: str) -> str:
-    """Lower-case an extension and make sure it starts with a dot.
-
-    Examples::
-
-        _norm_ext("MD")  # ".md"
-    """
-    ext = ext.lower()
-    return ext if ext.startswith(".") else "." + ext
-
-
 def _parser() -> argparse.ArgumentParser:
     """Build the argument parser."""
     p = argparse.ArgumentParser(
@@ -79,7 +73,7 @@ def _parser() -> argparse.ArgumentParser:
         action="append",
         default=[],
         metavar="EXT",
-        help="extra extension to skip, e.g. -e .txt (repeatable)",
+        help="extra extension to skip, e.g. -e .txt (repeatable; also ignore-ext in [tool.ramani])",
     )
     p.add_argument(
         "-d",
@@ -143,9 +137,16 @@ def main(argv: list[str] | None = None) -> int:
     if not args.path.exists():
         parser.error(f"path not found: {args.path}")
 
+    root = args.path if args.path.is_dir() else args.path.parent
+    folders = list(dict.fromkeys([Path.cwd(), root.resolve()]))
+
     filters = Filters(
         dirs=(*IGNORE_DIRS, *args.ignore_dir),
-        exts=(*IGNORE_EXTS, *map(_norm_ext, args.ignore_ext)),
+        exts=(
+            *IGNORE_EXTS,
+            *(ext for folder in folders for ext in load_pyproject_ignore_exts(folder)),
+            *map(norm_ext, args.ignore_ext),
+        ),
         gitignore=not args.no_gitignore,
     )
 
@@ -166,9 +167,8 @@ def main(argv: list[str] | None = None) -> int:
             print(paint_err("(copied to clipboard)", "green"), file=sys.stderr)
         return 0
 
-    root = args.path if args.path.is_dir() else args.path.parent
     styles: Styles = {}
-    for folder in dict.fromkeys([Path.cwd(), root.resolve()]):
+    for folder in folders:
         styles.update(load_pyproject_styles(folder))
     try:
         styles.update(parse_style(spec) for spec in args.comment)
