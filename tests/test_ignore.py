@@ -1,6 +1,10 @@
-# ramani: tests/test_ignore_ext.py
+# ramani: tests/test_ignore.py
 from ramani.cli import main
-from ramani.settings import load_pyproject_ignore_exts, norm_ext
+from ramani.settings import (
+    load_pyproject_ignore_dirs,
+    load_pyproject_ignore_exts,
+    norm_ext,
+)
 
 
 def test_norm_ext():
@@ -39,3 +43,27 @@ def test_cli_flag_adds_to_pyproject_ignore_ext(tmp_path):
     assert (tmp_path / "a.py").read_text().startswith("# ramani:")
     assert (tmp_path / "b.js").read_text() == "x\n"
     assert (tmp_path / "c.go").read_text() == "x\n"
+
+
+def test_pyproject_ignore_dirs(tmp_path):
+    assert load_pyproject_ignore_dirs(tmp_path) == ()
+    file = tmp_path / "pyproject.toml"
+    file.write_text('[tool.ramani]\nignore-dir = ["gen", "out*"]\n')
+    assert load_pyproject_ignore_dirs(tmp_path) == ("gen", "out*")
+    file.write_text('[tool.ramani]\nignore-dir = "gen"\n')
+    assert load_pyproject_ignore_dirs(tmp_path) == ("gen",)
+
+
+def test_cli_uses_pyproject_ignore_dir_for_marking_and_tree(tmp_path, capsys):
+    (tmp_path / "pyproject.toml").write_text('[tool.ramani]\nignore-dir = ["gen*"]\n')
+    for rel in ("a.py", "gen/b.py", "gen_x/c.py", "src/d.py"):
+        path = tmp_path / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("x = 1\n")
+    main([str(tmp_path), "-t"])
+    out = capsys.readouterr().out
+    assert "gen" not in out and "src/" in out
+    main([str(tmp_path), "-d", "src"])
+    assert (tmp_path / "a.py").read_text().startswith("# ramani:")
+    for rel in ("gen/b.py", "gen_x/c.py", "src/d.py"):
+        assert (tmp_path / rel).read_text() == "x = 1\n"

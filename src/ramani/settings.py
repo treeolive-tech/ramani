@@ -77,6 +77,19 @@ def load_pyproject_styles(directory: Path) -> Styles:
     return styles
 
 
+def _string_list(directory: Path, key: str) -> list[str]:
+    """Read a string or list of strings from ``[tool.ramani]`` as a list.
+
+    Examples::
+
+        # [tool.ramani]
+        # ignore-dir = "build*"
+        _string_list(Path("."), "ignore-dir")  # ["build*"]
+    """
+    value = _ramani_table(directory).get(key, [])
+    return [value] if isinstance(value, str) else list(value)
+
+
 def load_pyproject_ignore_exts(directory: Path) -> tuple[str, ...]:
     """Read ``ignore-ext`` from ``[tool.ramani]`` in ``directory/pyproject.toml``.
 
@@ -86,7 +99,16 @@ def load_pyproject_ignore_exts(directory: Path) -> tuple[str, ...]:
         # ignore-ext = [".txt", "CSV"]
         load_pyproject_ignore_exts(Path("."))  # (".txt", ".csv")
     """
-    value = _ramani_table(directory).get("ignore-ext", [])
-    return tuple(
-        norm_ext(ext) for ext in ([value] if isinstance(value, str) else value)
-    )
+    return tuple(norm_ext(ext) for ext in _string_list(directory, "ignore-ext"))
+
+
+def load_pyproject_ignore_dirs(directory: Path) -> tuple[str, ...]:
+    """Read ``ignore-dir`` (folder names or globs) from ``[tool.ramani]``.
+
+    Examples::
+
+        # [tool.ramani]
+        # ignore-dir = ["gen", "build*"]
+        load_pyproject_ignore_dirs(Path("."))  # ("gen", "build*")
+    """
+    return tuple(_string_list(directory, "ignore-dir"))
