@@ -37,7 +37,7 @@ Files travel without their address. They get pasted into chats, issues, code rev
 - 🧭 **Move-aware.** Rename or move a file, run ramani again, and its comment follows. Nothing is duplicated.
 - 🪶 **Careful placement.** The comment goes after shebangs, encoding lines, XML declarations and Markdown front matter, and never turns a docstring into a plain string.
 - 🗂️ **Knows 60+ file types.** Python, JavaScript, Go, Rust, SQL, HTML, CSS, Markdown, Dockerfile and more, each with the right comment syntax. Add your own in one line.
-- 🙈 **Respects your ignores.** Built-in lists for `__pycache__`, `node_modules` and friends, every `.gitignore` it finds (nested ones too), and flags for the rest.
+- 🙈 **Respects your ignores.** Built-in lists for `__pycache__`, `node_modules` and friends, every `.gitignore` it finds (nested ones too), and flags or `pyproject.toml` settings for the rest.
 - 🌳 **Prints a folder tree.** One flag draws your project as a tree, another copies it to the clipboard.
 - 🔍 **CI-friendly.** `--check` exits with code 1 when any comment is missing or stale. `--dry-run` writes nothing.
 - 🧹 **Reversible.** `--remove` strips every comment ramani added.
@@ -150,39 +150,42 @@ ramani ./src -t -d tests    # tree of ./src, leaving out tests
 
 ## Options
 
-| Option                          | What it does                                                        |
-| ------------------------------- | ------------------------------------------------------------------- |
-| `PATH`                          | Folder or file to process (default: current folder)                 |
-| `-e, --ignore-ext EXT`          | Also skip this extension, e.g. `-e .txt` (repeatable)               |
-| `-d, --ignore-dir NAME`         | Also skip this folder name or glob, e.g. `-d "build*"` (repeatable) |
-| `-c, --comment EXT=START[,END]` | Comment style for an extension or file name (repeatable)            |
-| `--no-gitignore`                | Ignore `.gitignore` files                                           |
-| `-n, --dry-run`                 | Show what would change, write nothing                               |
-| `--check`                       | Dry run that exits 1 if anything is missing or stale                |
-| `--remove`                      | Strip ramani comments instead of adding them                        |
-| `-t, --tree`                    | Print the folder tree instead of marking files                      |
-| `--copy`                        | Copy the tree to the clipboard (implies `--tree`)                   |
-| `-V, --version`                 | Print the installed version and exit                                |
-| `-v, --verbose`                 | Also list unchanged files                                           |
+| Option                          | What it does                                                                                               |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `PATH`                          | Folder or file to process (default: current folder)                                                        |
+| `-e, --ignore-ext EXT`          | Also skip this extension, e.g. `-e .txt` (repeatable; also `ignore-ext` in `pyproject.toml`)               |
+| `-d, --ignore-dir NAME`         | Also skip this folder name or glob, e.g. `-d "build*"` (repeatable; also `ignore-dir` in `pyproject.toml`) |
+| `-c, --comment EXT=START[,END]` | Comment style for an extension or file name (repeatable)                                                   |
+| `--no-gitignore`                | Ignore `.gitignore` files                                                                                  |
+| `-n, --dry-run`                 | Show what would change, write nothing                                                                      |
+| `--check`                       | Dry run that exits 1 if anything is missing or stale                                                       |
+| `--remove`                      | Strip ramani comments instead of adding them                                                               |
+| `-t, --tree`                    | Print the folder tree instead of marking files                                                             |
+| `--copy`                        | Copy the tree to the clipboard (implies `--tree`)                                                          |
+| `-V, --version`                 | Print the installed version and exit                                                                       |
+| `-v, --verbose`                 | Also list unchanged files                                                                                  |
 
 ## Configuration
 
-Settings can be given as flags or once and for all in your `pyproject.toml`. Flags beat `pyproject.toml`, which beats the built-in defaults.
+Settings can be given as flags or once and for all in your `pyproject.toml`.
 
-### Skip file types
+### Skip file types and folders
 
-Skip extensions with `-e`:
+Skip extensions with `-e` and folders with `-d` (a name or a glob):
 
 ```bash
-ramani -e .txt -e .csv
+ramani -e .txt -e .csv -d gen -d "build*"
 ```
 
-or list them in `pyproject.toml` (the leading dot is optional, and `-e` flags add to this list):
+or list them in `pyproject.toml` (the leading dot on extensions is optional):
 
 ```toml
 [tool.ramani]
 ignore-ext = [".txt", ".csv"]
+ignore-dir = ["gen", "build*"]
 ```
+
+Flags and `pyproject.toml` add to each other and to the built-in ignores, so nothing is overridden.
 
 ### Teach ramani a file type
 
@@ -202,7 +205,7 @@ or in `pyproject.toml`:
 ".tpl" = ["<!--", "-->"]
 ```
 
-Comment styles from flags beat `pyproject.toml`, which beats the built-in styles, so you can override those too.
+Flags beat `pyproject.toml`, which beats the built-in styles, so you can override those too.
 
 ## Supported files
 

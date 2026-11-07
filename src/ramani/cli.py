@@ -10,6 +10,7 @@ from .color import paint, paint_count, paint_err, paint_path, paint_status
 from .config import IGNORE_DIRS, IGNORE_EXTS
 from .core import Filters, Styles, run
 from .settings import (
+    load_pyproject_ignore_dirs,
     load_pyproject_ignore_exts,
     load_pyproject_styles,
     norm_ext,
@@ -81,7 +82,7 @@ def _parser() -> argparse.ArgumentParser:
         action="append",
         default=[],
         metavar="NAME",
-        help="extra folder name or glob to skip (repeatable)",
+        help="extra folder name or glob to skip (repeatable; also ignore-dir in [tool.ramani])",
     )
     p.add_argument(
         "-c",
@@ -141,7 +142,11 @@ def main(argv: list[str] | None = None) -> int:
     folders = list(dict.fromkeys([Path.cwd(), root.resolve()]))
 
     filters = Filters(
-        dirs=(*IGNORE_DIRS, *args.ignore_dir),
+        dirs=(
+            *IGNORE_DIRS,
+            *(d for folder in folders for d in load_pyproject_ignore_dirs(folder)),
+            *args.ignore_dir,
+        ),
         exts=(
             *IGNORE_EXTS,
             *(ext for folder in folders for ext in load_pyproject_ignore_exts(folder)),
