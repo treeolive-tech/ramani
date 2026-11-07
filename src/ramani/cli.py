@@ -9,6 +9,7 @@ from pathlib import Path
 from .color import paint, paint_count, paint_err, paint_path, paint_status
 from .config import IGNORE_DIRS, IGNORE_EXTS
 from .core import Filters, Styles, run
+from .formats import FORMATS, render
 from .settings import (
     load_pyproject_ignore_dirs,
     load_pyproject_ignore_exts,
@@ -16,7 +17,7 @@ from .settings import (
     norm_ext,
     parse_style,
 )
-from .tree import build_tree, copy_to_clipboard, paint_tree
+from .tree import copy_to_clipboard, paint_tree
 
 CHANGED = {"added", "updated", "removed"}
 HIDDEN = {"skipped", "unsupported"}
@@ -121,9 +122,15 @@ def _parser() -> argparse.ArgumentParser:
         help="print the folder structure as a tree instead of marking files (same ignores)",
     )
     p.add_argument(
+        "-f",
+        "--format",
+        choices=FORMATS,
+        help="map the project in this format instead of marking files (same ignores)",
+    )
+    p.add_argument(
         "--copy",
         action="store_true",
-        help="copy the tree to the clipboard (implies --tree)",
+        help="copy the map to the clipboard (a tree unless -f is given)",
     )
     return p
 
@@ -155,14 +162,19 @@ def main(argv: list[str] | None = None) -> int:
         gitignore=not args.no_gitignore,
     )
 
-    if args.tree or args.copy:
+    if args.tree or args.copy or args.format:
         if args.remove or args.check:
-            parser.error("--tree/--copy can't be combined with --remove or --check")
-        tree = build_tree(args.path, filters)
-        print(paint_tree(tree))
+            parser.error(
+                "--tree/--format/--copy can't be combined with --remove or --check"
+            )
+        if args.tree and args.format not in (None, "tree"):
+            parser.error(f"--tree can't be combined with --format {args.format}")
+        fmt = args.format or "tree"
+        text = render(args.path, fmt, filters)
+        print(paint_tree(text) if fmt == "tree" else text)
         if args.copy:
             try:
-                copy_to_clipboard(tree)
+                copy_to_clipboard(text)
             except RuntimeError as err:
                 failed = paint_err(
                     "ramani: could not copy to clipboard:", "red", "bold"

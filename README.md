@@ -3,10 +3,11 @@
 
 <p align="center">
   <strong>Every file knows where it lives.</strong><br>
-  A line at the top of each file says where it sits in your project, and it follows the file when it moves.
+  One comment at the top of each file says where it sits in your project, and it follows the file when it moves.
 </p>
 
 <p align="center">
+  <a href="https://pypi.org/project/ramani/"><img alt="PyPI version" src="https://img.shields.io/pypi/v/ramani?color=006600&label=pypi"></a>
   <a href="https://www.python.org/"><img alt="Python 3.13+" src="https://img.shields.io/badge/python-3.13%2B-3776AB?logo=python&logoColor=white"></a>
   <a href="https://docs.astral.sh/uv/"><img alt="Built with uv" src="https://img.shields.io/badge/built%20with-uv-DE5FE9"></a>
   <img alt="MIT license" src="https://img.shields.io/badge/license-MIT-blue">
@@ -16,12 +17,13 @@
 <p align="center">
   <a href="#install">Install</a> ·
   <a href="#usage">Usage</a> ·
-  <a href="#folder-tree">Folder tree</a> ·
+  <a href="#map-your-project">Map your project</a> ·
+  <a href="#use-it-in-ci">CI</a> ·
   <a href="#configuration">Configuration</a> ·
   <a href="#supported-files">Supported files</a>
 </p>
 
-> **ramani** _(ra-MA-ni)_ is Swahili for **"map"**. That is the whole idea: ramani draws a map of your project _inside_ the project. Each file carries one comment with its own path, kept correct as files are renamed and moved, and the same tool can print the entire project as a tree.
+> **ramani** _(ra-MA-ni)_ is Swahili for **"map"**. That is the whole idea: ramani draws a map of your project _inside_ the project. Each file carries one comment with its own path, kept correct as files are renamed and moved, and the same tool can print the entire project as a tree, a list, an outline, JSON or a diagram.
 
 ```python
 # ramani: src/shop/billing/pay.py
@@ -38,7 +40,7 @@ Files travel without their address. They get pasted into chats, issues, code rev
 - 🪶 **Careful placement.** The comment goes after shebangs, encoding lines, XML declarations and Markdown front matter, and never turns a docstring into a plain string.
 - 🗂️ **Knows 60+ file types.** Python, JavaScript, Go, Rust, SQL, HTML, CSS, Markdown, Dockerfile and more, each with the right comment syntax. Add your own in one line.
 - 🙈 **Respects your ignores.** Built-in lists for `__pycache__`, `node_modules` and friends, every `.gitignore` it finds (nested ones too), and flags or `pyproject.toml` settings for the rest.
-- 🌳 **Prints a folder tree.** One flag draws your project as a tree, another copies it to the clipboard.
+- 🗺️ **Maps your project five ways.** Tree, flat paths, Markdown outline, JSON or a Mermaid diagram, and one flag copies any of them to your clipboard.
 - 🔍 **CI-friendly.** `--check` exits with code 1 when any comment is missing or stale. `--dry-run` writes nothing.
 - 🧹 **Reversible.** `--remove` strips every comment ramani added.
 
@@ -106,6 +108,20 @@ title: Setup
 
 Move `pay.py` into a new `billing/` folder and run ramani again. It recognises its own comment, sees the path is out of date, and rewrites it. Untouched files stay untouched.
 
+```text
+  file                  first line
+  ────────────────────  ───────────────────────────────
+  src/shop/pay.py       # ramani: src/shop/pay.py
+        │
+        │  mv src/shop/pay.py src/shop/billing/
+        ▼
+  src/shop/billing/pay.py   # ramani: src/shop/pay.py          ← stale
+        │
+        │  ramani
+        ▼
+  src/shop/billing/pay.py   # ramani: src/shop/billing/pay.py  ← fixed
+```
+
 ```console
 $ mkdir src/shop/billing && mv src/shop/pay.py src/shop/billing/
 $ ramani
@@ -113,16 +129,23 @@ updated   src/shop/billing/pay.py
 4 unchanged, 1 unsupported, 1 updated
 ```
 
-```python
-# ramani: src/shop/billing/pay.py
-def pay(): ...
-```
+## Map your project
 
-Add `ramani --check` to CI or a pre-commit hook to catch stale comments before they land. It changes nothing and exits with 1 if anything needs updating.
+ramani can print the whole project, using the same ignore rules as marking, so you see exactly the files it works on. Nothing is written. Pick a format with `-f` (`-t` is shorthand for `-f tree`):
 
-## Folder tree
+| Format     | Flag combination | Best for                                        |
+| ---------- | ---------------- | ----------------------------------------------- |
+| `tree`     | `-t`, `-f tree`  | Reading in a terminal, pasting into chats       |
+| `paths`    | `-f paths`       | Scripts: `xargs`, `grep`, `wc -l`               |
+| `markdown` | `-f markdown`    | Issues, pull requests and docs                  |
+| `json`     | `-f json`        | Tools, dashboards, anything that parses         |
+| `mermaid`  | `-f mermaid`     | A diagram that GitHub and many doc sites render |
 
-`--tree` prints your project as a tree and writes nothing. It uses the same ignore rules as marking, so you see exactly the files ramani works on. Folders come first.
+Add `--copy` to any of them to put the result on your clipboard.
+
+### Tree
+
+Folders come first.
 
 ```console
 $ ramani --tree
@@ -139,14 +162,131 @@ shop/
 └── data.json
 ```
 
-Add `--copy` to also put the tree on your clipboard, ready to paste into a chat, an issue or a doc.
+### Paths
 
-```bash
-ramani --copy               # print the tree and copy it
-ramani ./src -t -d tests    # tree of ./src, leaving out tests
+One file per line, relative to the folder you pointed at. Empty folders are left out.
+
+```console
+$ ramani -f paths
+docs/setup.md
+src/shop/billing/pay.py
+src/shop/cart.py
+src/shop/index.html
+README.md
+data.json
 ```
 
-> On Linux, the clipboard needs `xclip`, `xsel` or `wl-clipboard` installed. If none is available the tree is still printed, with a note on stderr and exit code 1.
+Handy in pipelines:
+
+```bash
+ramani -f paths | xargs wc -l
+```
+
+### Markdown
+
+A nested bullet list that renders cleanly anywhere Markdown does.
+
+```console
+$ ramani -f markdown
+- `shop/`
+  - `docs/`
+    - `setup.md`
+  - `src/`
+    - `shop/`
+      - `billing/`
+        - `pay.py`
+      - `cart.py`
+      - `index.html`
+  - `README.md`
+  - `data.json`
+```
+
+### JSON
+
+Nested objects with a `name`, a `type` (`dir` or `file`) and, for folders, `children`.
+
+```console
+$ ramani -f json
+{
+  "name": "shop",
+  "type": "dir",
+  "children": [
+    {
+      "name": "docs",
+      "type": "dir",
+      "children": [{ "name": "setup.md", "type": "file" }]
+    },
+    { "name": "README.md", "type": "file" }
+  ]
+}
+```
+
+_(Abridged here; the real output is indented one key per line.)_
+
+### Mermaid
+
+A `flowchart` you can paste straight into a README, an issue or a wiki. GitHub draws it as a diagram; elsewhere you will see the source.
+
+```console
+$ ramani -f mermaid
+flowchart TD
+    n0["shop/"]
+    n1["src/"]
+    n0 --> n1
+    n2["cart.py"]
+    n1 --> n2
+    n3["pay.py"]
+    n1 --> n3
+    n4["README.md"]
+    n0 --> n4
+```
+
+```mermaid
+flowchart TD
+    n0["shop/"]
+    n1["src/"]
+    n0 --> n1
+    n2["cart.py"]
+    n1 --> n2
+    n3["pay.py"]
+    n1 --> n3
+    n4["README.md"]
+    n0 --> n4
+```
+
+### Combine with other flags
+
+```bash
+ramani --copy                       # print the tree and copy it
+ramani ./src -f markdown --copy     # outline of ./src on your clipboard
+ramani -f paths -d tests -e .md     # paths, leaving out tests and Markdown
+```
+
+> On Linux, the clipboard needs `xclip`, `xsel` or `wl-clipboard` installed. If none is available the map is still printed, with a note on stderr and exit code 1.
+
+## Use it in CI
+
+`--check` changes nothing and exits with 1 if any comment is missing or stale, so stale paths never reach your main branch.
+
+**GitHub Actions**
+
+```yaml
+- uses: astral-sh/setup-uv@v7
+- run: uvx ramani --check
+```
+
+**pre-commit**
+
+```yaml
+repos:
+  - repo: local
+    hooks:
+      - id: ramani
+        name: ramani
+        entry: uvx ramani --check
+        language: system
+        pass_filenames: false
+```
 
 ## Options
 
@@ -161,9 +301,12 @@ ramani ./src -t -d tests    # tree of ./src, leaving out tests
 | `--check`                       | Dry run that exits 1 if anything is missing or stale                                                       |
 | `--remove`                      | Strip ramani comments instead of adding them                                                               |
 | `-t, --tree`                    | Print the folder tree instead of marking files                                                             |
-| `--copy`                        | Copy the tree to the clipboard (implies `--tree`)                                                          |
+| `-f, --format FORMAT`           | Map the project as `tree`, `paths`, `markdown`, `json` or `mermaid` instead of marking files               |
+| `--copy`                        | Copy the map to the clipboard (implies `--tree` unless `-f` is given)                                      |
 | `-V, --version`                 | Print the installed version and exit                                                                       |
 | `-v, --verbose`                 | Also list unchanged files                                                                                  |
+
+`-t`, `-f` and `--copy` can't be combined with `--remove` or `--check`.
 
 ## Configuration
 
@@ -224,10 +367,29 @@ Formats with no comment syntax, such as `.json` and `.csv`, are left alone and l
 
 ## How it works
 
-1. Skip anything that must stay first: a shebang, an encoding line, an XML declaration, a `# syntax=` line, or front matter in Markdown.
-2. Look at the next line. If it is a ramani comment with the **same** path, do nothing.
-3. If it is a ramani comment with a **different** path, the file has moved. Rewrite that one line.
-4. If it is not a ramani comment, insert one.
+For every file, ramani makes one decision:
+
+```text
+                    ┌───────────────────────────────┐
+                    │  skip what must stay first:   │
+                    │  shebang · encoding line ·    │
+                    │  XML declaration · # syntax=  │
+                    │  · Markdown front matter      │
+                    └───────────────┬───────────────┘
+                                    ▼
+                  is the next line a ramani comment?
+                       │                      │
+                      no                     yes
+                       │                      │
+                       ▼                      ▼
+              insert the comment        is the path the same?
+                  → added                 │            │
+                                         yes           no
+                                          │            │
+                                          ▼            ▼
+                                     do nothing    rewrite that line
+                                    → unchanged       → updated
+```
 
 Line endings (LF or CRLF) and UTF-8 byte-order marks are preserved. Symlinks, files that are not UTF-8, and binary files (anything containing a NUL byte) are never touched.
 
