@@ -41,6 +41,7 @@ Files travel without their address. They get pasted into chats, issues, code rev
 - 🗂️ **Knows 60+ file types.** Python, JavaScript, Go, Rust, SQL, HTML, CSS, Markdown, Dockerfile and more, each with the right comment syntax. Add your own in one line.
 - 🙈 **Respects your ignores.** Built-in lists for `__pycache__`, `node_modules` and friends, every `.gitignore` it finds (nested ones too), and flags or `pyproject.toml` settings for the rest.
 - 🗺️ **Maps your project five ways.** Tree, flat paths, Markdown outline, JSON or a Mermaid diagram, and one flag copies any of them to your clipboard.
+- 🛑 **Asks before big runs.** Pointed at a huge folder (say, a whole drive) by mistake? ramani asks before writing to more than 1000 files. `--yes` skips the question.
 - 🔍 **CI-friendly.** `--check` exits with code 1 when any comment is missing or stale. `--dry-run` writes nothing.
 - 🧹 **Reversible.** `--remove` strips every comment ramani added.
 
@@ -128,6 +129,24 @@ $ ramani
 updated   src/shop/billing/pay.py
 4 unchanged, 1 unsupported, 1 updated
 ```
+
+### Big folders ask first
+
+If a run would write to more than 1000 files, ramani stops and asks before touching anything. That keeps a stray `ramani` in your home folder or on a whole drive from rewriting everything under it.
+
+```console
+$ cd /
+$ ramani
+ramani: more than 1000 files under /. Continue? [y/N] n
+aborted, nothing was changed
+```
+
+- `-y, --yes` skips the question.
+- `--max-files N` changes the limit (default: 1000).
+- Without a terminal (CI, pipes) and without `--yes`, ramani aborts with exit code 1 rather than waiting for an answer.
+- `--dry-run`, `--check` and every map format write nothing, so they never ask.
+
+The count follows the same ignore rules as marking, and stops as soon as the limit is passed, so ramani doesn't scan a whole drive just to count.
 
 ## Map your project
 
@@ -266,7 +285,7 @@ ramani -f paths -d tests -e .md     # paths, leaving out tests and Markdown
 
 ## Use it in CI
 
-`--check` changes nothing and exits with 1 if any comment is missing or stale, so stale paths never reach your main branch.
+`--check` changes nothing and exits with 1 if any comment is missing or stale, so stale paths never reach your main branch. It never asks for confirmation. A real run (without `--check` or `--dry-run`) over more than 1000 files needs `--yes` when there is no terminal.
 
 **GitHub Actions**
 
@@ -299,6 +318,8 @@ repos:
 | `--no-gitignore`                | Ignore `.gitignore` files                                                                                  |
 | `-n, --dry-run`                 | Show what would change, write nothing                                                                      |
 | `--check`                       | Dry run that exits 1 if anything is missing or stale                                                       |
+| `--max-files N`                 | Ask before writing to more than `N` files (default: 1000)                                                  |
+| `-y, --yes`                     | Don't ask for confirmation, even for a large number of files                                               |
 | `--remove`                      | Strip ramani comments instead of adding them                                                               |
 | `-t, --tree`                    | Print the folder tree instead of marking files                                                             |
 | `-f, --format FORMAT`           | Map the project as `tree`, `paths`, `markdown`, `json` or `mermaid` instead of marking files               |
