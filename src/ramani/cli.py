@@ -4,13 +4,14 @@
 import argparse
 import sys
 from collections import Counter
+from dataclasses import replace
 from itertools import islice
 from pathlib import Path
 
 from .color import paint, paint_count, paint_err, paint_path, paint_status
 from .config import IGNORE_DIRS, IGNORE_EXTS
 from .core import Filters, Styles, iter_files, run
-from .formats import FORMATS, render
+from .formats import EXT_FORMATS, FORMAT_EXTS, FORMATS, format_for, render
 from .settings import (
     env_flag,
     env_int,
@@ -22,6 +23,7 @@ from .settings import (
     parse_style,
 )
 from .tree import copy_to_clipboard, paint_tree
+from .workspace import ensure_dir
 
 CHANGED = {"added", "updated", "removed"}
 HIDDEN = {"skipped", "unsupported"}
@@ -56,6 +58,20 @@ def _label(rel: str) -> str:
     """
     path = Path(rel)
     return path.suffix.lower() or path.name
+
+
+def _shown(path: Path) -> str:
+    """Show a path relative to the current folder when it is inside it.
+
+    Examples::
+
+        _shown(Path.cwd() / "docs/map.md")  # "docs/map.md"
+        _shown(Path("/elsewhere/map.md"))  # "/elsewhere/map.md"
+    """
+    try:
+        return path.resolve().relative_to(Path.cwd().resolve()).as_posix()
+    except ValueError:
+        return str(path)
 
 
 def _too_many(root: Path, filters: Filters, limit: int) -> bool:
@@ -183,6 +199,15 @@ def _parser() -> argparse.ArgumentParser:
         action="store_true",
         help="copy the map to the clipboard (a tree unless -f is given)",
     )
+    p.add_argument(
+        "-o",
+        "--output",
+        nargs="?",
+        const="",
+        default=None,
+        metavar="FILE",
+        help="save the map to FILE (format from its extension, or -f); with no FILE, save to .ramani/map.<ext> (put PATH before -o)",
+    )
     return p
 
 
@@ -215,16 +240,41 @@ def main(argv: list[str] | None = None) -> int:
         gitignore=not (args.no_gitignore or env_flag("RAMANI_NO_GITIGNORE")),
     )
 
-    if args.tree or args.copy or args.format:
+    if args.tree or args.copy or args.format or args.output is not None:
         if args.remove or args.check:
             parser.error(
-                "--tree/--format/--copy can't be combined with --remove or --check"
+                "--tree/--format/--copy/--output can't be combined with --remove or --check"
             )
         if args.tree and args.format not in (None, "tree"):
             parser.error(f"--tree can't be combined with --format {args.format}")
-        fmt = args.format or "tree"
+        fmt = args.format or ("tree" if args.tree else None)
+        out = Path(args.output) if args.output else None
+        if out is not None:
+            if out.is_dir():
+                parser.error(
+                    f"{out} is a folder, not a file; put the folder before -o (ramani {out} -o)"
+                )
+            fmt = fmt or format_for(out)
+            if fmt is None:
+                parser.error(
+                    f"can't tell the format of {out.name!r}: use -f, or one of "
+                    f"{', '.join(EXT_FORMATS)}"
+                )
+            filters = replace(filters, skip=(str(out.resolve()),))
+        fmt = fmt or "tree"
         text = render(args.path, fmt, filters)
-        print(paint_tree(text) if fmt == "tree" else text)
+        if args.output is None:
+            print(paint_tree(text) if fmt == "tree" else text)
+        else:
+            try:
+                dest = out or ensure_dir(root.resolve()) / f"map{FORMAT_EXTS[fmt]}"
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                dest.write_text(text + "\n", encoding="utf-8", newline="\n")
+            except (OSError, RuntimeError) as err:
+                failed = paint_err("ramani: could not save the map:", "red", "bold")
+                print(f"{failed} {err}", file=sys.stderr)
+                return 1
+            print(paint_err(f"(saved to {_shown(dest)})", "green"), file=sys.stderr)
         if args.copy:
             try:
                 copy_to_clipboard(text)

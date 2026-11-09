@@ -12,6 +12,23 @@ from .tree import build_tree
 
 FORMATS = ("tree", "paths", "markdown", "json", "mermaid")
 
+# file extension -> format when saving with -o, and the reverse for the default file name
+EXT_FORMATS = {
+    ".txt": "tree",
+    ".md": "markdown",
+    ".markdown": "markdown",
+    ".json": "json",
+    ".mmd": "mermaid",
+    ".mermaid": "mermaid",
+}
+FORMAT_EXTS = {
+    "tree": ".txt",
+    "paths": ".txt",
+    "markdown": ".md",
+    "json": ".json",
+    "mermaid": ".mmd",
+}
+
 Node = dict  # {"name": str, "type": "dir" | "file", "children": [Node]} (dirs only)
 
 
@@ -94,6 +111,18 @@ def _mermaid(node: Node, ids: Iterator[int], parent: str = "") -> Iterator[str]:
         yield f"    {parent} --> {me}"
     for child in node.get("children", []):
         yield from _mermaid(child, ids, me)
+
+
+def format_for(path: Path) -> str | None:
+    """Pick the map format a file name asks for, or None if the extension is unknown.
+
+    Examples::
+
+        format_for(Path("map.json"))  # "json"
+        format_for(Path("docs/STRUCTURE.MD"))  # "markdown"
+        format_for(Path("map.xyz"))  # None
+    """
+    return EXT_FORMATS.get(path.suffix.lower())
 
 
 def render(root: Path, fmt: str = "tree", filters: Filters = DEFAULT) -> str:

@@ -104,5 +104,6 @@ IGNORE_DIRS = (
     "build",
     ".next",
     "*.egg-info",
+    ".ramani",
 )
 IGNORE_EXTS = (".pyc", ".pyo", ".min.js", ".min.css", ".map", ".lock", ".log")

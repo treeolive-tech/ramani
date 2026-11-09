@@ -41,6 +41,7 @@ Files travel without their address. They get pasted into chats, issues, code rev
 - 🗂️ **Knows 60+ file types.** Python, JavaScript, Go, Rust, SQL, HTML, CSS, Markdown, Dockerfile and more, each with the right comment syntax. Add your own in one line.
 - 🙈 **Respects your ignores.** Built-in lists for `__pycache__`, `node_modules` and friends, every `.gitignore` it finds (nested ones too), and flags, environment variables or `pyproject.toml` settings for the rest.
 - 🗺️ **Maps your project five ways.** Tree, flat paths, Markdown outline, JSON or a Mermaid diagram, and one flag copies any of them to your clipboard.
+- 💾 **Saves a snapshot.** `-o` writes any map to a file you choose, or to a git-ignored `.ramani/` folder, ready to share.
 - 🛑 **Asks before big runs.** Pointed at a huge folder (say, a whole drive) by mistake? ramani asks before writing to more than 1000 files. `--yes` skips the question.
 - 🔍 **CI-friendly.** `--check` exits with code 1 when any comment is missing or stale. `--dry-run` writes nothing. Key settings can come from `RAMANI_*` environment variables.
 - 🧹 **Reversible.** `--remove` strips every comment ramani added.
@@ -283,6 +284,34 @@ ramani -f paths -d tests -e .md     # paths, leaving out tests and Markdown
 
 > On Linux, the clipboard needs `xclip`, `xsel` or `wl-clipboard` installed. If none is available the map is still printed, with a note on stderr and exit code 1.
 
+### Save a map to a file
+
+`--copy` reaches the clipboard; `-o` reaches a file you can attach, commit or upload.
+
+```bash
+ramani -o                         # save to .ramani/map.txt
+ramani -f json -o                 # save to .ramani/map.json
+ramani -o docs/structure.md       # save exactly there
+ramani ./src -o                   # map ./src, snapshot in ./src/.ramani/
+```
+
+The format comes from the extension, and `-f` always wins:
+
+| Extension          | Format     |
+| ------------------ | ---------- |
+| `.txt`             | `tree`     |
+| `.md`, `.markdown` | `markdown` |
+| `.json`            | `json`     |
+| `.mmd`, `.mermaid` | `mermaid`  |
+
+An unknown extension needs `-f` (`ramani -o map.out -f paths`). With no file name, the extension follows the format: `.txt` for `tree` and `paths`, `.md`, `.json` or `.mmd` for the others. Files are plain text, never coloured, and nothing is printed to the terminal except a short note on stderr.
+
+**The `.ramani/` folder** is created only when you run `-o` with no file name. It gets a `.gitignore` holding a block that ramani manages (`*`), so snapshots never reach git. Lines you add to that file are kept; ramani only rewrites its own block. The folder is always skipped by ramani itself, even with `--no-gitignore`.
+
+> **Careful:** an explicit `-o` path inside your project (say `-o map.md`) is a normal file. ramani leaves it out of its own map, but a later marking run will add a path comment to it, and `--check` will flag it. Save snapshots to `.ramani/`, outside the project, or list the file in `.gitignore`.
+
+Put the folder before `-o`: `ramani src -o` maps `src`, whereas `ramani -o src` means "save to a file called `src`" and stops with a hint.
+
 ## Use it in CI
 
 `--check` changes nothing and exits with 1 if any comment is missing or stale, so stale paths never reach your main branch. It never asks for confirmation. A real run (without `--check` or `--dry-run`) over more than 1000 files needs `--yes` when there is no terminal.
@@ -326,10 +355,11 @@ repos:
 | `-t, --tree`                    | Print the folder tree instead of marking files                                                                                  |
 | `-f, --format FORMAT`           | Map the project as `tree`, `paths`, `markdown`, `json` or `mermaid` instead of marking files                                    |
 | `--copy`                        | Copy the map to the clipboard (implies `--tree` unless `-f` is given)                                                           |
+| `-o, --output [FILE]`           | Save the map to `FILE` (format from its extension or `-f`); with no `FILE`, to `.ramani/map.<ext>`. Put `PATH` first            |
 | `-V, --version`                 | Print the installed version and exit                                                                                            |
 | `-v, --verbose`                 | Also list unchanged files                                                                                                       |
 
-`-t`, `-f` and `--copy` can't be combined with `--remove` or `--check`.
+`-t`, `-f`, `--copy` and `-o` can't be combined with `--remove` or `--check`.
 
 ## Configuration
 
