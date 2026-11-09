@@ -1,6 +1,7 @@
 # ramani: src/ramani/settings.py
-"""User-defined settings from command-line flags and ``[tool.ramani]``."""
+"""User-defined settings from command-line flags, environment variables and ``[tool.ramani]``."""
 
+import os
 import tomllib
 from pathlib import Path
 
@@ -36,6 +37,43 @@ def parse_style(spec: str) -> tuple[str, tuple[str, str]]:
     if "." not in key and key.islower():
         key = "." + key
     return (key.lower() if key.startswith(".") else key), (start, end)
+
+
+def env_list(name: str) -> list[str]:
+    """Read a comma-separated environment variable as a list.
+
+    Examples::
+
+        # RAMANI_IGNORE_EXT=".txt, csv"
+        env_list("RAMANI_IGNORE_EXT")  # [".txt", "csv"]
+    """
+    items = os.environ.get(name, "").split(",")
+    return [item.strip() for item in items if item.strip()]
+
+
+def env_flag(name: str) -> bool:
+    """Tell whether an environment variable is set to a true-like value.
+
+    Examples::
+
+        # RAMANI_NO_GITIGNORE=1
+        env_flag("RAMANI_NO_GITIGNORE")  # True
+    """
+    return os.environ.get(name, "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def env_int(name: str, default: int) -> int:
+    """Read an integer environment variable, or ``default`` if unset or invalid.
+
+    Examples::
+
+        # RAMANI_MAX_FILES=abc
+        env_int("RAMANI_MAX_FILES", 1000)  # 1000
+    """
+    try:
+        return int(os.environ[name])
+    except (KeyError, ValueError):
+        return default
 
 
 def _ramani_table(directory: Path) -> dict:
