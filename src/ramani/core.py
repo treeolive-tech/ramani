@@ -160,17 +160,19 @@ def strip_text(
 
 @dataclass(frozen=True)
 class Filters:
-    """What the walk skips: folder globs, extensions, and whether .gitignore is read.
+    """What the walk skips: folder globs, extensions, exact files, and whether .gitignore is read.
 
     Examples::
 
         Filters(dirs=("gen",), exts=(".js",))  # skip gen/ and *.js
         Filters(gitignore=False)  # ignore .gitignore files
+        Filters(skip=("/proj/map.md",))  # skip that one file (absolute path)
     """
 
     dirs: tuple[str, ...] = IGNORE_DIRS
     exts: tuple[str, ...] = IGNORE_EXTS
     gitignore: bool = True
+    skip: tuple[str, ...] = ()
 
 
 DEFAULT = Filters()
@@ -226,6 +228,8 @@ def visible_children(
         if is_dir and any(fnmatch(name, pattern) for pattern in filters.dirs):
             continue
         if not is_dir and name.lower().endswith(exts):
+            continue
+        if not is_dir and os.path.join(directory, name) in filters.skip:
             continue
         if stack and is_gitignored(join_rel(rel, name), is_dir, stack):
             continue
