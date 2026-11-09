@@ -471,3 +471,10 @@ Ramani has two small runtime dependencies: [`termcolor`](https://pypi.org/projec
 ## License
 
 MIT © Treeolive Tech Ltd. Use it, change it, ship it; just keep the copyright notice.
+
+---
+
+<p align="center">
+  <em>"...but the people who know their God shall be strong and do exploits."</em><br>
+  Daniel 11:32
+</p>
