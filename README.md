@@ -39,10 +39,10 @@ Files travel without their address. They get pasted into chats, issues, code rev
 - 🧭 **Move-aware.** Rename or move a file, run ramani again, and its comment follows. Nothing is duplicated.
 - 🪶 **Careful placement.** The comment goes after shebangs, encoding lines, XML declarations and Markdown front matter, and never turns a docstring into a plain string.
 - 🗂️ **Knows 60+ file types.** Python, JavaScript, Go, Rust, SQL, HTML, CSS, Markdown, Dockerfile and more, each with the right comment syntax. Add your own in one line.
-- 🙈 **Respects your ignores.** Built-in lists for `__pycache__`, `node_modules` and friends, every `.gitignore` it finds (nested ones too), and flags or `pyproject.toml` settings for the rest.
+- 🙈 **Respects your ignores.** Built-in lists for `__pycache__`, `node_modules` and friends, every `.gitignore` it finds (nested ones too), and flags, environment variables or `pyproject.toml` settings for the rest.
 - 🗺️ **Maps your project five ways.** Tree, flat paths, Markdown outline, JSON or a Mermaid diagram, and one flag copies any of them to your clipboard.
 - 🛑 **Asks before big runs.** Pointed at a huge folder (say, a whole drive) by mistake? ramani asks before writing to more than 1000 files. `--yes` skips the question.
-- 🔍 **CI-friendly.** `--check` exits with code 1 when any comment is missing or stale. `--dry-run` writes nothing.
+- 🔍 **CI-friendly.** `--check` exits with code 1 when any comment is missing or stale. `--dry-run` writes nothing. Key settings can come from `RAMANI_*` environment variables.
 - 🧹 **Reversible.** `--remove` strips every comment ramani added.
 
 ## Install
@@ -142,7 +142,7 @@ aborted, nothing was changed
 ```
 
 - `-y, --yes` skips the question.
-- `--max-files N` changes the limit (default: 1000).
+- `--max-files N` (or `RAMANI_MAX_FILES=N`) changes the limit (default: 1000).
 - Without a terminal (CI, pipes) and without `--yes`, ramani aborts with exit code 1 rather than waiting for an answer.
 - `--dry-run`, `--check` and every map format write nothing, so they never ask.
 
@@ -292,6 +292,8 @@ ramani -f paths -d tests -e .md     # paths, leaving out tests and Markdown
 ```yaml
 - uses: astral-sh/setup-uv@v7
 - run: uvx ramani --check
+  env:
+    RAMANI_IGNORE_DIR: gen,build*
 ```
 
 **pre-commit**
@@ -309,29 +311,29 @@ repos:
 
 ## Options
 
-| Option                          | What it does                                                                                               |
-| ------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `PATH`                          | Folder or file to process (default: current folder)                                                        |
-| `-e, --ignore-ext EXT`          | Also skip this extension, e.g. `-e .txt` (repeatable; also `ignore-ext` in `pyproject.toml`)               |
-| `-d, --ignore-dir NAME`         | Also skip this folder name or glob, e.g. `-d "build*"` (repeatable; also `ignore-dir` in `pyproject.toml`) |
-| `-c, --comment EXT=START[,END]` | Comment style for an extension or file name (repeatable)                                                   |
-| `--no-gitignore`                | Ignore `.gitignore` files                                                                                  |
-| `-n, --dry-run`                 | Show what would change, write nothing                                                                      |
-| `--check`                       | Dry run that exits 1 if anything is missing or stale                                                       |
-| `--max-files N`                 | Ask before writing to more than `N` files (default: 1000)                                                  |
-| `-y, --yes`                     | Don't ask for confirmation, even for a large number of files                                               |
-| `--remove`                      | Strip ramani comments instead of adding them                                                               |
-| `-t, --tree`                    | Print the folder tree instead of marking files                                                             |
-| `-f, --format FORMAT`           | Map the project as `tree`, `paths`, `markdown`, `json` or `mermaid` instead of marking files               |
-| `--copy`                        | Copy the map to the clipboard (implies `--tree` unless `-f` is given)                                      |
-| `-V, --version`                 | Print the installed version and exit                                                                       |
-| `-v, --verbose`                 | Also list unchanged files                                                                                  |
+| Option                          | What it does                                                                                                                    |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `PATH`                          | Folder or file to process (default: current folder)                                                                             |
+| `-e, --ignore-ext EXT`          | Also skip this extension, e.g. `-e .txt` (repeatable; also `ignore-ext` in `pyproject.toml`, `RAMANI_IGNORE_EXT`)               |
+| `-d, --ignore-dir NAME`         | Also skip this folder name or glob, e.g. `-d "build*"` (repeatable; also `ignore-dir` in `pyproject.toml`, `RAMANI_IGNORE_DIR`) |
+| `-c, --comment EXT=START[,END]` | Comment style for an extension or file name (repeatable)                                                                        |
+| `--no-gitignore`                | Ignore `.gitignore` files (also `RAMANI_NO_GITIGNORE=1`)                                                                        |
+| `-n, --dry-run`                 | Show what would change, write nothing                                                                                           |
+| `--check`                       | Dry run that exits 1 if anything is missing or stale                                                                            |
+| `--max-files N`                 | Ask before writing to more than `N` files (default: 1000; also `RAMANI_MAX_FILES`)                                              |
+| `-y, --yes`                     | Don't ask for confirmation, even for a large number of files                                                                    |
+| `--remove`                      | Strip ramani comments instead of adding them                                                                                    |
+| `-t, --tree`                    | Print the folder tree instead of marking files                                                                                  |
+| `-f, --format FORMAT`           | Map the project as `tree`, `paths`, `markdown`, `json` or `mermaid` instead of marking files                                    |
+| `--copy`                        | Copy the map to the clipboard (implies `--tree` unless `-f` is given)                                                           |
+| `-V, --version`                 | Print the installed version and exit                                                                                            |
+| `-v, --verbose`                 | Also list unchanged files                                                                                                       |
 
 `-t`, `-f` and `--copy` can't be combined with `--remove` or `--check`.
 
 ## Configuration
 
-Settings can be given as flags or once and for all in your `pyproject.toml`.
+Settings can be given as flags, as environment variables, or once and for all in your `pyproject.toml`.
 
 ### Skip file types and folders
 
@@ -349,7 +351,7 @@ ignore-ext = [".txt", ".csv"]
 ignore-dir = ["gen", "build*"]
 ```
 
-Flags and `pyproject.toml` add to each other and to the built-in ignores, so nothing is overridden.
+Flags, environment variables and `pyproject.toml` add to each other and to the built-in ignores, so nothing is overridden.
 
 ### Teach ramani a file type
 
@@ -370,6 +372,19 @@ or in `pyproject.toml`:
 ```
 
 Flags beat `pyproject.toml`, which beats the built-in styles, so you can override those too.
+
+### Environment variables
+
+Handy for CI and shell profiles. The lists add to the flags and `pyproject.toml`; for `RAMANI_MAX_FILES` the flag wins. An invalid number is ignored. `NO_COLOR=1` turns colour off.
+
+| Variable              | Same as          | Example                        |
+| --------------------- | ---------------- | ------------------------------ |
+| `RAMANI_IGNORE_EXT`   | `-e`             | `RAMANI_IGNORE_EXT=txt,csv`    |
+| `RAMANI_IGNORE_DIR`   | `-d`             | `RAMANI_IGNORE_DIR=gen,build*` |
+| `RAMANI_MAX_FILES`    | `--max-files`    | `RAMANI_MAX_FILES=5000`        |
+| `RAMANI_NO_GITIGNORE` | `--no-gitignore` | `RAMANI_NO_GITIGNORE=1`        |
+
+Lists are comma-separated. Comment styles (`-c`) and `--yes` are flag-only on purpose.
 
 ## Supported files
 

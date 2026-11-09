@@ -12,6 +12,9 @@ from .config import IGNORE_DIRS, IGNORE_EXTS
 from .core import Filters, Styles, iter_files, run
 from .formats import FORMATS, render
 from .settings import (
+    env_flag,
+    env_int,
+    env_list,
     load_pyproject_ignore_dirs,
     load_pyproject_ignore_exts,
     load_pyproject_styles,
@@ -108,7 +111,7 @@ def _parser() -> argparse.ArgumentParser:
         action="append",
         default=[],
         metavar="EXT",
-        help="extra extension to skip, e.g. -e .txt (repeatable; also ignore-ext in [tool.ramani])",
+        help="extra extension to skip, e.g. -e .txt (repeatable; also ignore-ext in [tool.ramani] or RAMANI_IGNORE_EXT)",
     )
     p.add_argument(
         "-d",
@@ -116,7 +119,7 @@ def _parser() -> argparse.ArgumentParser:
         action="append",
         default=[],
         metavar="NAME",
-        help="extra folder name or glob to skip (repeatable; also ignore-dir in [tool.ramani])",
+        help="extra folder name or glob to skip (repeatable; also ignore-dir in [tool.ramani] or RAMANI_IGNORE_DIR)",
     )
     p.add_argument(
         "-c",
@@ -127,7 +130,9 @@ def _parser() -> argparse.ArgumentParser:
         help="comment style for an extension, e.g. -c .abc=// or -c .tpl='<!--,-->' (repeatable)",
     )
     p.add_argument(
-        "--no-gitignore", action="store_true", help="don't read .gitignore files"
+        "--no-gitignore",
+        action="store_true",
+        help="don't read .gitignore files (also RAMANI_NO_GITIGNORE=1)",
     )
     p.add_argument(
         "--remove",
@@ -148,9 +153,9 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--max-files",
         type=int,
-        default=MAX_FILES,
+        default=env_int("RAMANI_MAX_FILES", MAX_FILES),
         metavar="N",
-        help=f"ask before writing to more than N files (default: {MAX_FILES})",
+        help=f"ask before writing to more than N files (default: {MAX_FILES}; also RAMANI_MAX_FILES)",
     )
     p.add_argument(
         "-y",
@@ -198,14 +203,16 @@ def main(argv: list[str] | None = None) -> int:
         dirs=(
             *IGNORE_DIRS,
             *(d for folder in folders for d in load_pyproject_ignore_dirs(folder)),
+            *env_list("RAMANI_IGNORE_DIR"),
             *args.ignore_dir,
         ),
         exts=(
             *IGNORE_EXTS,
             *(ext for folder in folders for ext in load_pyproject_ignore_exts(folder)),
+            *map(norm_ext, env_list("RAMANI_IGNORE_EXT")),
             *map(norm_ext, args.ignore_ext),
         ),
-        gitignore=not args.no_gitignore,
+        gitignore=not (args.no_gitignore or env_flag("RAMANI_NO_GITIGNORE")),
     )
 
     if args.tree or args.copy or args.format:
