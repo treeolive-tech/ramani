@@ -38,7 +38,7 @@ ramani = "ramani:main"
 Repository = "https://github.com/treeolive-tech/ramani.git"
 
 [dependency-groups]
-dev = ["pytest>=9.2.0", "poethepoet>=0.49.0"]
+dev = ["pytest>=9.2.0", "pre-commit>=4.7.0"]
 
 [tool.uv]
 preview-features = ["format-command", "check-command"]
@@ -46,23 +46,6 @@ preview-features = ["format-command", "check-command"]
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
-
-[tool.poe.tasks.format]
-sequence = [{ cmd = "uv run ramani" }, { cmd = "uv format" }]
-
-[tool.poe.tasks.lint]
-sequence = [
-    { cmd = "uv lock --check" },
-    { cmd = "uv run ramani --check" },
-    { cmd = "uv format --check" },
-    { cmd = "uv check" },
-]
-
-[tool.poe.tasks.test]
-sequence = [{ cmd = "uv run pytest" }]
-
-[tool.poe.tasks.add]
-sequence = [{ ref = "lint" }, { ref = "test" }, { cmd = "git add ." }]
 
 [[tool.uv.index]]
 name = "testpypi"
