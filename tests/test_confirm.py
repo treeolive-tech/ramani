@@ -50,3 +50,19 @@ def test_interactive_answers(tmp_path, monkeypatch):
 def test_single_file_never_prompts(tmp_path):
     make(tmp_path, 1)
     assert main([str(tmp_path / "f0.py"), "--max-files", "0"]) == 0
+
+
+def test_exempt_and_binary_files_do_not_count(tmp_path):
+    (tmp_path / "logo.png").write_bytes(b"png")
+    (tmp_path / "blob.py").write_bytes(b"x = \0")
+    assert main([str(tmp_path), "--max-files", "0"]) == 0
+
+
+def test_already_processed_file_still_counts(tmp_path):
+    (tmp_path / "a.py").write_text("# ramani: a.py\nx = 1\n")
+    assert main([str(tmp_path), "--max-files", "0"]) == 1
+
+
+def test_custom_comment_style_file_counts(tmp_path):
+    (tmp_path / "data.xyz").write_text("data\n")
+    assert main([str(tmp_path), "--max-files", "0", "-c", ".xyz=//"]) == 1
