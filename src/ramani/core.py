@@ -11,6 +11,7 @@ from pathlib import Path
 
 from .config import (
     COMMENT_STYLES,
+    EXEMPT_EXTS,
     FRONT_MATTER_EXTS,
     IGNORE_DIRS,
     IGNORE_EXTS,
@@ -258,6 +259,25 @@ def iter_files(root: Path, filters: Filters = DEFAULT) -> Iterator[tuple[Path, s
     yield from walk(str(root), "", [])
 
 
+def _is_exempt(path: Path) -> bool:
+    """Tell whether a file with no comment style is one that can't take a comment.
+
+    That means a known type, or a NUL byte near the start (binary).
+
+    Examples::
+
+        _is_exempt(Path("logo.png"))  # True
+        _is_exempt(Path("notes.xyz"))  # False if it holds plain text
+    """
+    if path.suffix.lower() in EXEMPT_EXTS:
+        return True
+    try:
+        with path.open("rb") as f:
+            return b"\0" in f.read(HEAD)
+    except OSError:
+        return False
+
+
 def process_file(
     path: Path,
     rel: str,
@@ -268,18 +288,20 @@ def process_file(
 ) -> str:
     """Add, refresh or strip one file's comment; returns its status.
 
-    Status is "added", "updated", "removed", "unchanged", "unsupported" (no comment
-    style known) or "skipped" (unreadable, not UTF-8, or binary: contains NUL bytes).
+    Status is "added", "updated", "removed", "unchanged", "exempt" (can't take a
+    comment), "unsupported" (no comment style known) or "skipped" (unreadable, not
+    UTF-8, or binary: contains NUL bytes).
 
     Examples::
 
         process_file(Path("app.py"), "app.py")  # "added"
+        process_file(Path("logo.png"), "logo.png")  # "exempt"
         process_file(Path("data.xyz"), "data.xyz")  # "unsupported"
         process_file(Path("blob.py"), "blob.py")  # "skipped" (has NUL bytes)
     """
     style = style_for(path, styles)
     if style is None:
-        return "unsupported"
+        return "exempt" if _is_exempt(path) else "unsupported"
     try:
         raw = path.read_text(encoding="utf-8", newline="")
     except (UnicodeDecodeError, OSError):
@@ -287,7 +309,7 @@ def process_file(
     if "\0" in raw:
         return "skipped"
 
-    bom, text = ("﻿", raw[1:]) if raw.startswith("﻿") else ("", raw)
+    bom, text = ("\ufeff", raw[1:]) if raw.startswith("\ufeff") else ("", raw)
     front = path.suffix.lower() in FRONT_MATTER_EXTS
     if remove:
         new, removed = strip_text(text, *style, front_matter=front)

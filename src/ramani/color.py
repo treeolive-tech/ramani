@@ -11,6 +11,7 @@ STATUS_COLORS = {
     "updated": ("yellow", ()),
     "removed": ("red", ()),
     "unchanged": ("white", ("dark",)),
+    "exempt": ("white", ("dark",)),
     "unsupported": ("magenta", ()),
     "skipped": ("yellow", ("dark",)),
 }

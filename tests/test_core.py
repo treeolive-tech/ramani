@@ -133,7 +133,7 @@ def test_default_and_extra_ignores(tmp_path):
 def test_unsupported_unreadable_and_binary_files_are_left_alone(tmp_path):
     files = {
         "notes.txt": (b"hello\n", "unsupported"),
-        "logo.png": (b"\x89PNG\r\n\x1a\n\x00", "unsupported"),
+        "logo.png": (b"\x89PNG\r\n\x1a\n\x00", "exempt"),
         "bad.py": (b"\xff\xfe\x00bad bytes", "skipped"),
         "blob.py": (b"MZ\x00\x01\x02data\n", "skipped"),  # valid UTF-8 but has NULs
         "tail.py": (b"x = 1\n\x00", "skipped"),
@@ -146,6 +146,35 @@ def test_unsupported_unreadable_and_binary_files_are_left_alone(tmp_path):
     assert statuses(run(tmp_path, remove=True)) == expected
     for name, (content, _) in files.items():
         assert (tmp_path / name).read_bytes() == content
+
+
+@pytest.mark.parametrize(
+    ("name", "content", "status"),
+    [
+        ("doc.pdf", b"%PDF-1.7\n", "exempt"),  # known type, no NUL byte
+        ("data.JSON", b"{}\n", "exempt"),  # extension case doesn't matter
+        ("rows.csv", b"a,b\n", "exempt"),
+        ("app.bin", b"ab\x00cd", "exempt"),  # unlisted binary
+        (".DS_Store", b"\x00\x01", "exempt"),
+        ("config.jsonc", b"{}\n", "unsupported"),
+        ("empty.xyz", b"", "unsupported"),
+        ("late.xyz", b"a" * 9000 + b"\x00", "unsupported"),  # NUL past the first 8 KB
+    ],
+)
+def test_exempt_detection(tmp_path, name, content, status):
+    (tmp_path / name).write_bytes(content)
+    assert statuses(run(tmp_path)) == {name: status}
+    assert (tmp_path / name).read_bytes() == content
+
+
+def test_custom_style_beats_exemption(tmp_path):
+    write(tmp_path, "settings.json", "{}\n")
+    assert statuses(run(tmp_path, styles={".json": ("//", "")})) == {
+        "settings.json": "added"
+    }
+    assert (tmp_path / "settings.json").read_text() == (
+        "// ramani: settings.json\n{}\n"
+    )
 
 
 def test_gitignore_rules_nesting_and_opt_out(tmp_path):
@@ -216,6 +245,32 @@ def test_cli_reports_and_check_exit_codes(tmp_path, capsys):
     out = capsys.readouterr().out
     assert "added" in out and "src/a.py" in out and "\x1b" not in out
     assert main([str(tmp_path), "--check"]) == 0
+
+
+def test_cli_hides_exempt_files_unless_verbose(tmp_path, capsys):
+    write(tmp_path, "a.py")
+    write(tmp_path, "logo.png", "png\n")
+    assert main([str(tmp_path)]) == 0
+    assert capsys.readouterr().out == "added     a.py\n1 added\n"
+    assert main([str(tmp_path), "-v"]) == 0
+    out = capsys.readouterr().out
+    assert "exempt    logo.png" in out and "1 exempt, 1 unchanged" in out
+
+
+@pytest.mark.parametrize("flags", [[], ["-n"], ["--remove"]])
+def test_cli_only_exempt_files_has_nothing_to_mark(tmp_path, capsys, flags):
+    write(tmp_path, "logo.png", "png\n")
+    assert main([str(tmp_path), *flags]) == 0
+    out = capsys.readouterr().out
+    assert "nothing to mark" in out and "no files found" not in out
+
+
+def test_cli_empty_folder_and_check_with_exempt_files(tmp_path, capsys):
+    assert main([str(tmp_path)]) == 0
+    assert "no files found" in capsys.readouterr().out
+    write(tmp_path, "logo.png", "png\n")
+    assert main([str(tmp_path), "--check"]) == 0
+    assert "all path comments are up to date" in capsys.readouterr().out
 
 
 def test_cli_ignore_flags(tmp_path):
