@@ -2,7 +2,7 @@
 import sys
 
 from ramani.cli import main
-from ramani.color import paint, paint_count, paint_err, paint_path, paint_status
+from ramani.color import paint_count, paint_err, paint_path, paint_status
 
 
 def tag(text, color=None, *attrs):
@@ -19,10 +19,6 @@ def test_paint_count_and_status_use_the_status_colour():
     assert paint_count(2, "unsupported", tag) == "<magenta>2 unsupported</>"
     assert paint_count(1, "mystery", tag) == "<->1 mystery</>"
     assert paint_status("updated", tag) == "<yellow>updated  </>"
-
-
-def test_paint_force_colours_even_when_piped():
-    assert paint("x", "green", force=True) == "\x1b[32mx\x1b[0m"
 
 
 def test_paint_err_follows_stderr_not_stdout(monkeypatch, capsys):

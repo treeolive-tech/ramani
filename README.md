@@ -463,7 +463,8 @@ Line endings (LF or CRLF) and UTF-8 byte-order marks are preserved. Symlinks, fi
 
 ```bash
 uv sync
-uv run poe test
+uv run pre-commit install
+uv run pytest
 ```
 
 Ramani has two small runtime dependencies: [`termcolor`](https://pypi.org/project/termcolor/) for coloured output and [`pyperclip`](https://pypi.org/project/pyperclip/) for `--copy`. Colour appears only in a terminal; pipes, files and the clipboard get plain text, and `NO_COLOR=1` turns it off.

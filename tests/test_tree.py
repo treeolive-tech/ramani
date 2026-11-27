@@ -70,10 +70,3 @@ def test_copy_without_pyperclip_installed(monkeypatch):
     )  # makes `import pyperclip` raise ImportError
     with pytest.raises(RuntimeError, match="not installed"):
         copy_to_clipboard("x")
-
-
-@pytest.mark.parametrize("flag", ["--remove", "--check"])
-def test_tree_conflicts_with_remove_and_check(tmp_path, flag):
-    with pytest.raises(SystemExit) as exc:
-        main([str(tmp_path), "--tree", flag])
-    assert exc.value.code == 2

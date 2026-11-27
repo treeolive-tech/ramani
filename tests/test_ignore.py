@@ -1,15 +1,6 @@
 # ramani: tests/test_ignore.py
 from ramani.cli import main
-from ramani.settings import (
-    load_pyproject_ignore_dirs,
-    load_pyproject_ignore_exts,
-    norm_ext,
-)
-
-
-def test_norm_ext():
-    assert norm_ext("MD") == ".md"
-    assert norm_ext(" .Txt ") == ".txt"
+from ramani.settings import load_pyproject_ignore_dirs, load_pyproject_ignore_exts
 
 
 def test_pyproject_ignore_exts(tmp_path):

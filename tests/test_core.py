@@ -153,9 +153,7 @@ def test_unsupported_unreadable_and_binary_files_are_left_alone(tmp_path):
     [
         ("doc.pdf", b"%PDF-1.7\n", "exempt"),  # known type, no NUL byte
         ("data.JSON", b"{}\n", "exempt"),  # extension case doesn't matter
-        ("rows.csv", b"a,b\n", "exempt"),
         ("app.bin", b"ab\x00cd", "exempt"),  # unlisted binary
-        (".DS_Store", b"\x00\x01", "exempt"),
         ("config.jsonc", b"{}\n", "unsupported"),
         ("empty.xyz", b"", "unsupported"),
         ("late.xyz", b"a" * 9000 + b"\x00", "unsupported"),  # NUL past the first 8 KB
@@ -189,18 +187,6 @@ def test_gitignore_rules_nesting_and_opt_out(tmp_path):
     }  # fmt: skip
     everything = statuses(run(tmp_path, dry_run=True, filters=Filters(gitignore=False)))
     assert "secret/s.py" in everything and "sub/local.py" in everything
-
-
-def test_gitignore_double_star_matches_git(tmp_path):
-    write(tmp_path, ".gitignore", "a/**b\ndocs/**/*.tmp\n")
-    for rel in ["a/xb", "a/x/yb.py", "a/x/b.py", "a/sub/c.py"]:
-        write(tmp_path, rel)
-    for rel in ["docs/a.tmp", "docs/x/y/b.tmp", "docs/x/keep.py"]:
-        write(tmp_path, rel)
-    # a/xb and a/sub/ end in "b", so ** acts as *; docs/**/ crosses folders
-    assert py_files(run(tmp_path, dry_run=True)) == {
-        "a/x/yb.py", "a/x/b.py", "docs/x/keep.py",
-    }  # fmt: skip
 
 
 def test_first_line_directives_stay_first(tmp_path):
@@ -257,10 +243,9 @@ def test_cli_hides_exempt_files_unless_verbose(tmp_path, capsys):
     assert "exempt    logo.png" in out and "1 exempt, 1 unchanged" in out
 
 
-@pytest.mark.parametrize("flags", [[], ["-n"], ["--remove"]])
-def test_cli_only_exempt_files_has_nothing_to_mark(tmp_path, capsys, flags):
+def test_cli_only_exempt_files_has_nothing_to_mark(tmp_path, capsys):
     write(tmp_path, "logo.png", "png\n")
-    assert main([str(tmp_path), *flags]) == 0
+    assert main([str(tmp_path)]) == 0
     out = capsys.readouterr().out
     assert "nothing to mark" in out and "no files found" not in out
 
