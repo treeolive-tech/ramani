@@ -5,12 +5,11 @@ import argparse
 import sys
 from collections import Counter
 from dataclasses import replace
-from itertools import islice
 from pathlib import Path
 
 from .color import paint, paint_count, paint_err, paint_path, paint_status
 from .config import IGNORE_DIRS, IGNORE_EXTS
-from .core import Filters, Styles, iter_files, run
+from .core import Filters, Styles, iter_files, process_file, run
 from .formats import EXT_FORMATS, FORMAT_EXTS, FORMATS, format_for, render
 from .settings import (
     env_flag,
@@ -74,16 +73,33 @@ def _shown(path: Path) -> str:
         return str(path)
 
 
-def _too_many(root: Path, filters: Filters, limit: int) -> bool:
-    """Tell whether ``root`` holds more than ``limit`` files, stopping the count early.
+def _too_many(
+    root: Path,
+    filters: Filters,
+    limit: int,
+    *,
+    styles: Styles,
+) -> bool:
+    """Tell whether ``root`` holds more than ``limit`` eligible text files.
 
     Examples::
 
-        _too_many(Path("C:/"), Filters(), 1000)  # True
-        _too_many(Path("small-project"), Filters(), 1000)  # False
+        _too_many(Path("C:/"), Filters(), 1000, styles={})  # True
+        _too_many(Path("small-project"), Filters(), 1000, styles={})  # False
     """
-    files = iter_files(root.resolve(), filters)
-    return sum(1 for _ in islice(files, limit + 1)) > limit
+    eligible = 0
+    for path, rel in iter_files(root.resolve(), filters):
+        status = process_file(
+            path,
+            rel,
+            dry_run=True,
+            styles=styles,
+        )
+        if status not in {"exempt", "unsupported", "skipped"}:
+            eligible += 1
+            if eligible > limit:
+                return True
+    return False
 
 
 def _confirmed(root: Path, limit: int) -> bool:
@@ -94,7 +110,9 @@ def _confirmed(root: Path, limit: int) -> bool:
         _confirmed(Path("."), 1000)  # True after typing "y"
     """
     warning = paint_err(
-        f"ramani: more than {limit} files under {root.resolve()}.", "yellow", "bold"
+        f"ramani: more than {limit} eligible text files under {root.resolve()}.",
+        "yellow",
+        "bold",
     )
     if not sys.stdin.isatty():
         print(f"{warning} Pass --yes to continue.", file=sys.stderr)
@@ -171,7 +189,7 @@ def _parser() -> argparse.ArgumentParser:
         type=int,
         default=env_int("RAMANI_MAX_FILES", MAX_FILES),
         metavar="N",
-        help=f"ask before writing to more than N files (default: {MAX_FILES}; also RAMANI_MAX_FILES)",
+        help=f"ask before processing more than N eligible text files (default: {MAX_FILES}; also RAMANI_MAX_FILES)",
     )
     p.add_argument(
         "-y",
@@ -302,7 +320,12 @@ def main(argv: list[str] | None = None) -> int:
     if (
         not (dry_run or args.yes)
         and args.path.is_dir()
-        and _too_many(args.path, filters, args.max_files)
+        and _too_many(
+            args.path,
+            filters,
+            args.max_files,
+            styles=styles,
+        )
         and not _confirmed(args.path, args.max_files)
     ):
         print(paint_err("aborted, nothing was changed", "red"), file=sys.stderr)

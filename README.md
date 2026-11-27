@@ -42,7 +42,7 @@ Files travel without their address. They get pasted into chats, issues, code rev
 - 🙈 **Respects your ignores.** Built-in lists for `__pycache__`, `node_modules` and friends, every `.gitignore` it finds (nested ones too), and flags, environment variables or `pyproject.toml` settings for the rest.
 - 🗺️ **Maps your project five ways.** Tree, flat paths, Markdown outline, JSON or a Mermaid diagram, and one flag copies any of them to your clipboard.
 - 💾 **Saves a snapshot.** `-o` writes any map to a file you choose, or to a git-ignored `.ramani/` folder, ready to share.
-- 🛑 **Asks before big runs.** Pointed at a huge folder (say, a whole drive) by mistake? ramani asks before writing to more than 1000 files. `--yes` skips the question.
+- 🛑 **Asks before big runs.** Pointed at a huge folder (say, a whole drive) by mistake? ramani asks before processing more than 1000 eligible text files. `--yes` skips the question.
 - 🔍 **CI-friendly.** `--check` exits with code 1 when any comment is missing or stale. `--dry-run` writes nothing. Key settings can come from `RAMANI_*` environment variables.
 - 🧹 **Reversible.** `--remove` strips every comment ramani added.
 
@@ -131,12 +131,12 @@ updated   src/shop/billing/pay.py
 
 ### Big folders ask first
 
-If a run would write to more than 1000 files, ramani stops and asks before touching anything. That keeps a stray `ramani` in your home folder or on a whole drive from rewriting everything under it.
+If a run would process more than 1000 eligible text files, ramani stops and asks before touching anything. That keeps a stray `ramani` in your home folder or on a whole drive from rewriting everything under it.
 
 ```console
 $ cd /
 $ ramani
-ramani: more than 1000 files under /. Continue? [y/N] n
+ramani: more than 1000 eligible text files under /. Continue? [y/N] n
 aborted, nothing was changed
 ```
 
@@ -145,7 +145,7 @@ aborted, nothing was changed
 - Without a terminal (CI, pipes) and without `--yes`, ramani aborts with exit code 1 rather than waiting for an answer.
 - `--dry-run`, `--check` and every map format write nothing, so they never ask.
 
-The count follows the same ignore rules as marking, and stops as soon as the limit is passed, so ramani doesn't scan a whole drive just to count.
+The count follows the same ignore rules as marking and includes only eligible UTF-8 text files that Ramani can process. Images, binaries, and unsupported or unreadable files do not count. It stops as soon as the limit is passed, so Ramani doesn't scan a whole drive just to count.
 
 ## Map your project
 
@@ -312,7 +312,7 @@ Put the folder before `-o`: `ramani src -o` maps `src`, whereas `ramani -o src` 
 
 ## Use it in CI
 
-`--check` changes nothing and exits with 1 if any comment is missing or stale, so stale paths never reach your main branch. It never asks for confirmation. A real run (without `--check` or `--dry-run`) over more than 1000 files needs `--yes` when there is no terminal.
+`--check` changes nothing and exits with 1 if any comment is missing or stale, so stale paths never reach your main branch. It never asks for confirmation. A real run (without `--check` or `--dry-run`) over more than 1000 eligible text files needs `--yes` when there is no terminal.
 
 **GitHub Actions**
 
@@ -347,7 +347,7 @@ repos:
 | `--no-gitignore`                | Ignore `.gitignore` files (also `RAMANI_NO_GITIGNORE=1`)                                                                        |
 | `-n, --dry-run`                 | Show what would change, write nothing                                                                                           |
 | `--check`                       | Dry run that exits 1 if anything is missing or stale                                                                            |
-| `--max-files N`                 | Ask before writing to more than `N` files (default: 1000; also `RAMANI_MAX_FILES`)                                              |
+| `--max-files N`                 | Ask before processing more than `N` eligible text files (default: 1000; also `RAMANI_MAX_FILES`)                                |
 | `-y, --yes`                     | Don't ask for confirmation, even for a large number of files                                                                    |
 | `--remove`                      | Strip ramani comments instead of adding them                                                                                    |
 | `-t, --tree`                    | Print the folder tree instead of marking files                                                                                  |
