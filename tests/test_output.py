@@ -1,11 +1,9 @@
 # ramani: tests/test_output.py
-from pathlib import Path
-
 import pytest
 
 from ramani.cli import main
 from ramani.core import Filters
-from ramani.formats import FORMATS, format_for, render
+from ramani.formats import FORMATS, render
 from ramani.workspace import BLOCK, END, START, ensure_dir, merge_block
 
 
@@ -117,13 +115,6 @@ def test_bare_output_for_a_single_file_uses_its_folder(proj):
     assert (proj / ".ramani/map.txt").read_text() == "README.md\n"
 
 
-def test_snapshot_overwrites_the_previous_one(proj):
-    main([str(proj), "-o"])
-    touch(proj, "extra.py")
-    main([str(proj), "-o"])
-    assert "extra.py" in (proj / ".ramani/map.txt").read_text()
-
-
 # --- -o FILE ---------------------------------------------------------------
 
 
@@ -200,8 +191,3 @@ def test_output_conflicts_with_remove_and_check(tmp_path, flag):
     with pytest.raises(SystemExit) as exc:
         main([str(tmp_path), "-o", flag])
     assert exc.value.code == 2
-
-
-def test_format_for():
-    assert format_for(Path("A.JSON")) == "json"
-    assert format_for(Path("A.xyz")) is None

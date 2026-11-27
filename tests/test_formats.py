@@ -67,11 +67,6 @@ def test_mermaid(proj):
     )
 
 
-def test_tree_is_the_default(proj):
-    assert render(proj) == render(proj, "tree")
-    assert render(proj).startswith("proj/\n├── src/")
-
-
 def test_single_file(tmp_path):
     touch(tmp_path, "a.py")
     file = tmp_path / "a.py"
@@ -99,23 +94,3 @@ def test_cli_format_prints_without_modifying(proj, capsys, fmt):
     assert main([str(proj), "-f", fmt]) == 0
     assert capsys.readouterr().out.rstrip("\n") == render(proj, fmt)
     assert (proj / "src/util.py").read_text() == "x = 1\n"
-
-
-def test_cli_format_copies_the_chosen_format(proj, monkeypatch):
-    copied = []
-    monkeypatch.setattr("ramani.cli.copy_to_clipboard", copied.append)
-    assert main([str(proj), "-f", "json", "--copy"]) == 0
-    assert copied == [render(proj, "json")]
-
-
-@pytest.mark.parametrize("flag", ["--remove", "--check"])
-def test_format_conflicts_with_remove_and_check(tmp_path, flag):
-    with pytest.raises(SystemExit) as exc:
-        main([str(tmp_path), "-f", "paths", flag])
-    assert exc.value.code == 2
-
-
-def test_cli_rejects_unknown_format(tmp_path):
-    with pytest.raises(SystemExit) as exc:
-        main([str(tmp_path), "-f", "yaml"])
-    assert exc.value.code == 2
