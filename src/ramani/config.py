@@ -81,6 +81,65 @@ NAME_STYLES: dict[str, tuple[str, str]] = {
     ".editorconfig": ("#", ""),
 }
 
+# types that can't safely take a comment; left alone without a warning
+_IMAGES = (
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".gif",
+    ".bmp",
+    ".tif",
+    ".tiff",
+    ".webp",
+    ".avif",
+    ".heic",
+    ".ico",
+    ".icns",
+    ".psd",
+)
+_MEDIA = (
+    ".mp3",
+    ".wav",
+    ".ogg",
+    ".flac",
+    ".aac",
+    ".m4a",
+    ".mp4",
+    ".m4v",
+    ".mov",
+    ".avi",
+    ".mkv",
+    ".webm",
+)
+_ARCHIVES = (
+    ".zip",
+    ".tar",
+    ".gz",
+    ".tgz",
+    ".bz2",
+    ".xz",
+    ".7z",
+    ".rar",
+    ".whl",
+    ".jar",
+)
+_FONTS = (".ttf", ".otf", ".woff", ".woff2", ".eot")
+_DOCUMENTS = (
+    ".pdf",
+    ".doc",
+    ".docx",
+    ".xls",
+    ".xlsx",
+    ".ppt",
+    ".pptx",
+    ".odt",
+    ".ods",
+    ".odp",
+)
+_DATA = (".json", ".csv", ".tsv")  # text, but with no comment syntax
+
+EXEMPT_EXTS = frozenset((*_IMAGES, *_MEDIA, *_ARCHIVES, *_FONTS, *_DOCUMENTS, *_DATA))
+
 # first lines that must stay first (shebang, encoding, XML declaration, Dockerfile directives)
 KEEP_FIRST = ("#!", "# -*-", "# coding", "<?xml", "# syntax=", "# escape=")
 

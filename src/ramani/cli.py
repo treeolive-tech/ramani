@@ -35,7 +35,7 @@ def _version() -> str:
 
     Examples::
 
-        _version()  # "0.1.0a4"
+        _version()  # "0.1.1"
     """
     from importlib.metadata import (
         PackageNotFoundError,
@@ -180,7 +180,10 @@ def _parser() -> argparse.ArgumentParser:
         help="don't ask for confirmation, even for a large number of files",
     )
     p.add_argument(
-        "-v", "--verbose", action="store_true", help="also list unchanged files"
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="also list unchanged files and files that can't take comments",
     )
     p.add_argument(
         "-t",
@@ -323,10 +326,15 @@ def main(argv: list[str] | None = None) -> int:
             print(f"{paint_status(status)} {paint_path(rel)}")
 
     counts = Counter(status for _, status in results)
-    summary = ", ".join(paint_count(n, s) for s, n in sorted(counts.items()))
+    summary = ", ".join(
+        paint_count(n, s)
+        for s, n in sorted(counts.items())
+        if s != "exempt" or args.verbose
+    )
+    empty = "nothing to mark" if results else "no files found"
     print(
         (paint("(dry run) ", "cyan", "bold") if dry_run else "")
-        + (summary or paint("no files found", "yellow"))
+        + (summary or paint(empty, "yellow"))
     )
 
     unknown = Counter(_label(rel) for rel, status in results if status == "unsupported")

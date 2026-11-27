@@ -79,9 +79,7 @@ added     src/shop/cart.py
 added     src/shop/index.html
 added     src/shop/pay.py
 added     README.md
-5 added, 1 unsupported
-no comment style for: .json x1
-  add one with -c EXT=START[,END] or [tool.ramani.comments] in pyproject.toml
+5 added
 ```
 
 The comment uses each language's own syntax, and sits where it can't break anything:
@@ -128,7 +126,7 @@ Move `pay.py` into a new `billing/` folder and run ramani again. It recognises i
 $ mkdir src/shop/billing && mv src/shop/pay.py src/shop/billing/
 $ ramani
 updated   src/shop/billing/pay.py
-4 unchanged, 1 unsupported, 1 updated
+4 unchanged, 1 updated
 ```
 
 ### Big folders ask first
@@ -357,7 +355,7 @@ repos:
 | `--copy`                        | Copy the map to the clipboard (implies `--tree` unless `-f` is given)                                                           |
 | `-o, --output [FILE]`           | Save the map to `FILE` (format from its extension or `-f`); with no `FILE`, to `.ramani/map.<ext>`. Put `PATH` first            |
 | `-V, --version`                 | Print the installed version and exit                                                                                            |
-| `-v, --verbose`                 | Also list unchanged files                                                                                                       |
+| `-v, --verbose`                 | Also list unchanged files and files that can't take comments (`exempt`)                                                         |
 
 `-t`, `-f`, `--copy` and `-o` can't be combined with `--remove` or `--check`.
 
@@ -429,7 +427,9 @@ Lists are comma-separated. Comment styles (`-c`) and `--yes` are flag-only on pu
 | `{/* */}`  | `{/* ramani: a/b.mdx */}`   | `.mdx`                                                                                                                                   |
 | `%`        | `% ramani: a/b.tex`         | `.tex`                                                                                                                                   |
 
-Formats with no comment syntax, such as `.json` and `.csv`, are left alone and listed at the end of each run so nothing is skipped silently. The full table lives in `src/ramani/config.py`.
+Files that can't take a comment are left alone without a warning: images, audio, video, archives, fonts, PDFs, office documents, `.json`, `.csv`, `.tsv`, and any other file of unknown type with a NUL byte in its first 8 KB. Run with `-v` to list them as `exempt`. A comment style you add yourself takes priority, though files containing NUL bytes or invalid UTF-8 are still never written to.
+
+Other file types ramani doesn't know are listed at the end of each run, so you can add a style for them. The full tables live in `src/ramani/config.py`.
 
 ## How it works
 
